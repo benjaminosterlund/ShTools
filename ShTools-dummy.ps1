@@ -6,9 +6,9 @@ $ErrorActionPreference = "Stop"
 $ScriptPath = $PSCommandPath
 
 
-$UpdateUrl = "https://raw.githubusercontent.com/benjaminosterlund/ShTools/main/ShTools.ps1"  # URL to download script updates
+$UpdateUrl = "https://raw.githubusercontent.com/benjaminosterlund/ShTools/refs/heads/main/ShTools.ps1"  # URL to download script updates
 $ScriptsRepoUrl = "https://raw.githubusercontent.com/benjaminosterlund/ShTools/main/ShTools"  # Base URL for scripts folder
-$LocalScriptsFolder = ".\ShTools"      
+$LocalScriptsFolder = "ShTools"      
 
 
 #region Self-Update Functions
@@ -121,22 +121,24 @@ function Get-GitHubScriptsList {
         [string]$RepoName = "ShTools",
         [string]$FolderPath = "Src"
     )
-    
+    $allScripts = @()
     try {
         $apiUrl = "https://api.github.com/repos/$RepoOwner/$RepoName/contents/$FolderPath"
-        Write-Host "Fetching script list from repository..." -ForegroundColor Cyan
-        
-        # Add headers for GitHub API
+        Write-Host "Fetching script list from: $apiUrl" -ForegroundColor Cyan
         $headers = @{
             'Accept' = 'application/vnd.github+json'
             'User-Agent' = "PowerShell-$RepoName"
         }
-        
         $response = Invoke-RestMethod -Uri $apiUrl -Headers $headers
-        $scripts = $response | Where-Object { $_.type -eq "file" -and $_.name -like "*.ps1" }
-        
-        Write-Host "Found $($scripts.Count) script(s) available for download." -ForegroundColor Cyan
-        return $scripts
+        foreach ($item in $response) {
+            if ($item.type -eq "file") {
+                $allScripts += $item
+            } elseif ($item.type -eq "dir") {
+                $subfolder = $item.path
+                $allScripts += Get-GitHubScriptsList -RepoOwner $RepoOwner -RepoName $RepoName -FolderPath $subfolder
+            }
+        }
+        return $allScripts
     }
     catch {
         if ($_.Exception.Response.StatusCode -eq 404) {
@@ -181,7 +183,7 @@ function Download-Script {
 
 function Download-AllScripts {
     param(
-        [string]$LocalFolder
+        [string]$LocalFolderName = "ShTools"
     )
     
     $scripts = Get-GitHubScriptsList
@@ -197,7 +199,17 @@ function Download-AllScripts {
     $failCount = 0
     
     foreach ($script in $scripts) {
-        $result = Download-Script -Url $script.download_url -FileName $script.name -DestinationFolder $LocalFolder
+        $localRelativePath = $script.path -Replace '^Src/', "$LocalFolderName/" 
+        $localFullPath = Join-Path $PsScriptRoot $localRelativePath
+        $localDir = Split-Path -Path $localFullPath -Parent
+        if (-not (Test-Path $localDir)) {
+            New-Item -Path $localDir -ItemType Directory -Force | Out-Null
+        }
+
+
+        $result = Download-Script -Url $script.download_url -FileName $script.name -DestinationFolder $localDir
+
+        
         if ($result) {
             $successCount++
         }
@@ -207,7 +219,7 @@ function Download-AllScripts {
     }
     
     Write-Host "`nDownload Summary:" -ForegroundColor Cyan
-    Write-Host "  Success: $successCount" -ForegroundColor Green
+    Write-Host "  Files downloaded: $successCount" -ForegroundColor Green
     Write-Host "  Failed: $failCount" -ForegroundColor $(if ($failCount -gt 0) { "Red" } else { "Gray" })
 }
 
@@ -243,7 +255,7 @@ function Download-AllScripts {
 
     # Step 3: Check and update .gitignore if needed
     $gitignorePath = ".gitignore"
-    $pattern = "ShTools/*"
+    $pattern = "$LocalScriptsFolder/*"
     
     if (Test-Path $gitignorePath) {
         $content = Get-Content -Path $gitignorePath -Raw
@@ -254,7 +266,7 @@ function Download-AllScripts {
     }
     
     if (-not $hasEntry) {
-        Write-Host "`nThe 'ShTools' folder contains downloaded scripts that should not be committed." -ForegroundColor Yellow
+        Write-Host "`nThe '$LocalScriptsFolder' folder contains downloaded scripts that should not be committed." -ForegroundColor Yellow
         $response = Read-Host "Add '$pattern' to .gitignore? (Y/n)"
         
         if ($response -eq '' -or $response -match '^[Yy]') {
@@ -262,7 +274,7 @@ function Download-AllScripts {
                 New-Item -Path $gitignorePath -ItemType File -Force | Out-Null
             }
             
-            Add-Content -Path $gitignorePath -Value "`n# ShTools - Downloaded scripts`n$pattern"
+            Add-Content -Path $gitignorePath -Value "`n# $LocalScriptsFolder - Downloaded scripts`n$pattern"
             Write-Host "✓ Added to .gitignore" -ForegroundColor Green
         }
         else {
@@ -272,13 +284,13 @@ function Download-AllScripts {
     Write-Host ""
 
     # Step 4: Download scripts
-    Download-AllScripts -LocalFolder $LocalScriptsFolder
+    Download-AllScripts -LocalFolderName $LocalScriptsFolder
 
 
     # Step 5: Self-update (Always at end to avoid interruptions)
     # Dynamically detect if the parent folder is 'ShTools'
     $parentFolder = Split-Path -Path $ScriptPath -Parent | Split-Path -Leaf
-    if ($parentFolder -ne "ShTools") {
+    if ($parentFolder -ne "$LocalScriptsFolder") {
         $updateFile = Test-UpdateAvailable -Url $UpdateUrl
         if ($updateFile) {
             Update-SelfScript -TempFile $updateFile
