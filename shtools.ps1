@@ -6,9 +6,9 @@ $ErrorActionPreference = "Stop"
 $ScriptPath = $PSCommandPath
 
 
-$UpdateUrl = "https://raw.githubusercontent.com/benjaminosterlund/ShTools/main/shtools.ps1"  # URL to download script updates
-$ScriptsRepoUrl = "https://raw.githubusercontent.com/benjaminosterlund/ShTools/main/shtools"  # Base URL for scripts folder
-$LocalScriptsFolder = ".\shtools"      
+$UpdateUrl = "https://raw.githubusercontent.com/benjaminosterlund/ShTools/main/ShTools.ps1"  # URL to download script updates
+$ScriptsRepoUrl = "https://raw.githubusercontent.com/benjaminosterlund/ShTools/main/ShTools"  # Base URL for scripts folder
+$LocalScriptsFolder = ".\ShTools"      
 
 
 #region Self-Update Functions
@@ -42,6 +42,33 @@ function Test-UpdateAvailable {
         return $null
     }
 }
+
+    function Configure-ShtoolsConfig {
+        param(
+            [string]$ConfigPath,
+            [string]$DefaultScriptsFolder
+        )
+        Write-Host "Creating configuration file..." -ForegroundColor Cyan
+        $defaultProjectPath = "./RecipesApi/RecipesApi.csproj"
+        $defaultTestProjectPath = "./RecipesApi.Tests/RecipesApi.Tests.csproj"
+
+        $projectPath = Read-Host "Enter main project path (relative to repo root)" -Prompt $defaultProjectPath
+        if ([string]::IsNullOrWhiteSpace($projectPath)) { $projectPath = $defaultProjectPath }
+
+        $testProjectPath = Read-Host "Enter test project path (relative to repo root)" -Prompt $defaultTestProjectPath
+        if ([string]::IsNullOrWhiteSpace($testProjectPath)) { $testProjectPath = $defaultTestProjectPath }
+
+        $config = @{
+            version         = "1.0"
+            lastUpdate      = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+            scriptsFolder   = $DefaultScriptsFolder
+            autoUpdate      = $true
+            projectPath     = $projectPath
+            testProjectPath = $testProjectPath
+        }
+        $config | ConvertTo-Json | Set-Content -Path $ConfigPath
+        Write-Host "✓ Configuration file created: $ConfigPath" -ForegroundColor Green
+    }
 
 function Update-SelfScript {
     param([string]$TempFile)
@@ -92,7 +119,7 @@ function Get-GitHubScriptsList {
     param(
         [string]$RepoOwner = "benjaminosterlund",
         [string]$RepoName = "ShTools",
-        [string]$FolderPath = "shtools-src"
+        [string]$FolderPath = "ShTools-Src"
     )
     
     try {
@@ -102,7 +129,7 @@ function Get-GitHubScriptsList {
         # Add headers for GitHub API
         $headers = @{
             'Accept' = 'application/vnd.github+json'
-            'User-Agent' = 'PowerShell-ShTools'
+            'User-Agent' = "PowerShell-$RepoName"
         }
         
         $response = Invoke-RestMethod -Uri $apiUrl -Headers $headers
@@ -204,23 +231,12 @@ function Download-AllScripts {
         Write-Host "✓ Scripts folder exists: $LocalScriptsFolder" -ForegroundColor Gray
     }
 
+
     # Step 2: Configure shtools.config.json in root
     $configPath = Join-Path $PsScriptRoot "shtools.config.json"
     if (-not (Test-Path $configPath)) {
-        Write-Host "Creating configuration file..." -ForegroundColor Cyan
-        
-        $config = @{
-            version       = "1.0"
-            lastUpdate    = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
-            scriptsFolder = $LocalScriptsFolder
-            autoUpdate    = $true
-        }
-        
-        $config | ConvertTo-Json | Set-Content -Path $configPath
-        Write-Host "✓ Configuration file created: $configPath" -ForegroundColor Green
-
-    }
-    else {
+        Configure-ShtoolsConfig -ConfigPath $configPath -DefaultScriptsFolder $LocalScriptsFolder
+    } else {
         Write-Host "✓ Configuration file exists" -ForegroundColor Gray
     }
 
