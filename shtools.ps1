@@ -43,32 +43,32 @@ function Test-UpdateAvailable {
     }
 }
 
-    function Configure-ShtoolsConfig {
-        param(
-            [string]$ConfigPath,
-            [string]$DefaultScriptsFolder
-        )
-        Write-Host "Creating configuration file..." -ForegroundColor Cyan
-        $defaultProjectPath = "./RecipesApi/RecipesApi.csproj"
-        $defaultTestProjectPath = "./RecipesApi.Tests/RecipesApi.Tests.csproj"
+    # function Configure-ShtoolsConfig {
+    #     param(
+    #         [string]$ConfigPath,
+    #         [string]$DefaultScriptsFolder
+    #     )
+    #     Write-Host "Creating configuration file..." -ForegroundColor Cyan
+    #     $defaultProjectPath = "./RecipesApi/RecipesApi.csproj"
+    #     $defaultTestProjectPath = "./RecipesApi.Tests/RecipesApi.Tests.csproj"
 
-        $projectPath = Read-Host "Enter main project path (relative to repo root)" -Prompt $defaultProjectPath
-        if ([string]::IsNullOrWhiteSpace($projectPath)) { $projectPath = $defaultProjectPath }
+    #     $projectPath = Read-Host "Enter main project path (relative to repo root)" -Prompt $defaultProjectPath
+    #     if ([string]::IsNullOrWhiteSpace($projectPath)) { $projectPath = $defaultProjectPath }
 
-        $testProjectPath = Read-Host "Enter test project path (relative to repo root)" -Prompt $defaultTestProjectPath
-        if ([string]::IsNullOrWhiteSpace($testProjectPath)) { $testProjectPath = $defaultTestProjectPath }
+    #     $testProjectPath = Read-Host "Enter test project path (relative to repo root)" -Prompt $defaultTestProjectPath
+    #     if ([string]::IsNullOrWhiteSpace($testProjectPath)) { $testProjectPath = $defaultTestProjectPath }
 
-        $config = @{
-            version         = "1.0"
-            lastUpdate      = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
-            scriptsFolder   = $DefaultScriptsFolder
-            autoUpdate      = $true
-            projectPath     = $projectPath
-            testProjectPath = $testProjectPath
-        }
-        $config | ConvertTo-Json | Set-Content -Path $ConfigPath
-        Write-Host "✓ Configuration file created: $ConfigPath" -ForegroundColor Green
-    }
+    #     $config = @{
+    #         version         = "1.0"
+    #         lastUpdate      = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+    #         scriptsFolder   = $DefaultScriptsFolder
+    #         autoUpdate      = $true
+    #         projectPath     = $projectPath
+    #         testProjectPath = $testProjectPath
+    #     }
+    #     $config | ConvertTo-Json | Set-Content -Path $ConfigPath
+    #     Write-Host "✓ Configuration file created: $ConfigPath" -ForegroundColor Green
+    # }
 
 function Update-SelfScript {
     param([string]$TempFile)
@@ -119,7 +119,7 @@ function Get-GitHubScriptsList {
     param(
         [string]$RepoOwner = "benjaminosterlund",
         [string]$RepoName = "ShTools",
-        [string]$FolderPath = "ShTools-Src"
+        [string]$FolderPath = "Src"
     )
     
     try {
@@ -228,22 +228,22 @@ function Download-AllScripts {
         Write-Host "✓ Folder created" -ForegroundColor Green
     }
     else {
-        Write-Host "✓ Scripts folder exists: $LocalScriptsFolder" -ForegroundColor Gray
+        Write-Host "✓ Scripts/tools folder exists: $LocalScriptsFolder" -ForegroundColor Gray
     }
 
 
     # Step 2: Configure shtools.config.json in root
-    $configPath = Join-Path $PsScriptRoot "shtools.config.json"
-    if (-not (Test-Path $configPath)) {
-        Configure-ShtoolsConfig -ConfigPath $configPath -DefaultScriptsFolder $LocalScriptsFolder
-    } else {
-        Write-Host "✓ Configuration file exists" -ForegroundColor Gray
-    }
+    # $configPath = Join-Path $PsScriptRoot "shtools.config.json"
+    # if (-not (Test-Path $configPath)) {
+    #     Configure-ShtoolsConfig -ConfigPath $configPath -DefaultScriptsFolder $LocalScriptsFolder
+    # } else {
+    #     Write-Host "✓ Configuration file exists" -ForegroundColor Gray
+    # }
 
 
     # Step 3: Check and update .gitignore if needed
     $gitignorePath = ".gitignore"
-    $pattern = "shtools/*"
+    $pattern = "ShTools/*"
     
     if (Test-Path $gitignorePath) {
         $content = Get-Content -Path $gitignorePath -Raw
@@ -254,7 +254,7 @@ function Download-AllScripts {
     }
     
     if (-not $hasEntry) {
-        Write-Host "`nThe 'shtools' folder contains downloaded scripts that should not be committed." -ForegroundColor Yellow
+        Write-Host "`nThe 'ShTools' folder contains downloaded scripts that should not be committed." -ForegroundColor Yellow
         $response = Read-Host "Add '$pattern' to .gitignore? (Y/n)"
         
         if ($response -eq '' -or $response -match '^[Yy]') {

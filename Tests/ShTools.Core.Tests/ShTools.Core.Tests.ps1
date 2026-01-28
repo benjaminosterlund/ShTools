@@ -1,7 +1,7 @@
 
 Describe 'DotnetUserSecrets Module' {
     BeforeAll {
-            $modulePath = Join-Path $PSScriptRoot '\..\..\ShTools-Src\ShTools.Core\ShTools.Core.psd1' 
+            $modulePath = Join-Path $PSScriptRoot '\..\..\Src\ShTools.Core\ShTools.Core.psd1' 
             $script:mod = Import-Module $modulePath -Force -PassThru -ErrorAction Stop
     }
 
