@@ -50,7 +50,7 @@ function Configure-ShtoolsConfigIfNotExists {
 
     $configPath = Join-Path $PsScriptRoot "shtools.config.json"
 
-    if (-Test-Path $configPath) {
+    if (Test-Path $configPath) {
         Write-Host "Configuration file exists: $configPath" -ForegroundColor Gray
         return
     }
