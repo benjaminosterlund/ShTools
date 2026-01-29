@@ -9,7 +9,7 @@ $ScriptPath = $PSCommandPath
 $UpdateUrl = "https://raw.githubusercontent.com/benjaminosterlund/ShTools/refs/heads/main/ShTools.ps1"  # URL to download script updates
 $ScriptsRepoUrl = "https://raw.githubusercontent.com/benjaminosterlund/ShTools/main/ShTools"  # Base URL for scripts folder
 $LocalScriptsFolder = "ShTools"      
-
+$shToolsRepoName = "ShTools"
 
 #region Self-Update Functions
 
@@ -43,34 +43,49 @@ function Test-UpdateAvailable {
     }
 }
 
-    # function Configure-ShtoolsConfig {
-    #     param(
-    #         [string]$ConfigPath,
-    #         [string]$DefaultScriptsFolder
-    #     )
-    #     Write-Host "Creating configuration file..." -ForegroundColor Cyan
-    #     $defaultProjectPath = "./RecipesApi/RecipesApi.csproj"
-    #     $defaultTestProjectPath = "./RecipesApi.Tests/RecipesApi.Tests.csproj"
+function Configure-ShtoolsConfigIfNotExists {
+    param(
+        [string]$ScriptsFolder
+    )
 
-    #     $projectPath = Read-Host "Enter main project path (relative to repo root)" -Prompt $defaultProjectPath
-    #     if ([string]::IsNullOrWhiteSpace($projectPath)) { $projectPath = $defaultProjectPath }
+    $configPath = Join-Path $PsScriptRoot "shtools.config.json"
 
-    #     $testProjectPath = Read-Host "Enter test project path (relative to repo root)" -Prompt $defaultTestProjectPath
-    #     if ([string]::IsNullOrWhiteSpace($testProjectPath)) { $testProjectPath = $defaultTestProjectPath }
+    if (-Test-Path $configPath) {
+        Write-Host "Configuration file exists: $configPath" -ForegroundColor Gray
+        return
+    }
 
-    #     $config = @{
-    #         version         = "1.0"
-    #         lastUpdate      = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
-    #         scriptsFolder   = $DefaultScriptsFolder
-    #         autoUpdate      = $true
-    #         projectPath     = $projectPath
-    #         testProjectPath = $testProjectPath
-    #     }
-    #     $config | ConvertTo-Json | Set-Content -Path $ConfigPath
-    #     Write-Host "✓ Configuration file created: $ConfigPath" -ForegroundColor Green
-    # }
 
-function Update-SelfScript {
+    if ((Read-Host "Would you like to create a configuration file now? (Y/n)" -Default "Y") -match '^[Yy]') {
+
+        $projectPath = $null
+        $testProjectPath = $null
+
+        if ((Read-Host "Configure .NET projects? (Y/n)" -Default "Y") -match '^[Yy]') {
+            
+            $projectPath = Select-DotnetProject -Prompt "Select main .NET project"
+                
+            $testProjectPath = Select-DotnetProjects -Prompt "Select test .NET project(s)"
+        } 
+
+
+        $config = @{
+            version         = "1.0"
+            lastUpdate      = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+            scriptsFolder   = $ScriptsFolder
+            autoUpdate      = $true
+            projectPath     = $projectPath
+            testProjectPath = @($testProjectPath)
+        }
+
+
+
+        $config | ConvertTo-Json | Set-Content -Path:$configPath
+        Write-Host "✓ Configuration file created: $configPath" -ForegroundColor Green
+    }
+}
+
+function Update-SelfScriptAndRestart {
     param([string]$TempFile)
     
     try {
@@ -223,6 +238,17 @@ function Download-AllScripts {
     Write-Host "  Failed: $failCount" -ForegroundColor $(if ($failCount -gt 0) { "Red" } else { "Gray" })
 }
 
+
+function IsDevelopmentEnvironment {
+    param()
+    $parentFolder = Split-Path -Path $ScriptPath -Parent | Split-Path -Leaf
+    return $parentFolder -eq $shToolsRepoName
+}
+
+function IsProductionEnvironment {
+    param()
+    return -not (IsDevelopmentEnvironment)
+}
 #endregion
 
 
@@ -233,7 +259,23 @@ function Download-AllScripts {
     Write-Host "=== ShTools Script Manager ===" -ForegroundColor Cyan
     Write-Host ""
 
-    # Step 1: Setup local scripts folder
+
+    # Step: Self-update (Always at end to avoid interruptions)
+    # Dynamically detect if the parent folder is 'ShTools'
+    $parentFolder = Split-Path -Path $ScriptPath -Parent | Split-Path -Leaf
+    if (IsProductionEnvironment) {
+        $updateFile = Test-UpdateAvailable -Url $UpdateUrl
+        if ($updateFile) {
+            Update-SelfScriptAndRestart -TempFile $updateFile
+        }else{
+            Write-Host "No updates found." -ForegroundColor Gray
+        }
+        
+    } else {
+        Write-Host "Self-update skipped in development." -ForegroundColor Yellow
+    }
+
+    # Step: Setup local scripts folder
     if (-not (Test-Path $LocalScriptsFolder)) {
         Write-Host "Creating local scripts folder: $LocalScriptsFolder" -ForegroundColor Cyan
         New-Item -Path $LocalScriptsFolder -ItemType Directory -Force | Out-Null
@@ -244,16 +286,7 @@ function Download-AllScripts {
     }
 
 
-    # Step 2: Configure shtools.config.json in root
-    # $configPath = Join-Path $PsScriptRoot "shtools.config.json"
-    # if (-not (Test-Path $configPath)) {
-    #     Configure-ShtoolsConfig -ConfigPath $configPath -DefaultScriptsFolder $LocalScriptsFolder
-    # } else {
-    #     Write-Host "✓ Configuration file exists" -ForegroundColor Gray
-    # }
-
-
-    # Step 3: Check and update .gitignore if needed
+    # Step: Check and update .gitignore if needed
     $gitignorePath = ".gitignore"
     $pattern = "$LocalScriptsFolder/*"
     
@@ -287,18 +320,19 @@ function Download-AllScripts {
     Download-AllScripts -LocalFolderName $LocalScriptsFolder
 
 
-    # Step 5: Self-update (Always at end to avoid interruptions)
-    # Dynamically detect if the parent folder is 'ShTools'
-    $parentFolder = Split-Path -Path $ScriptPath -Parent | Split-Path -Leaf
-    if ($parentFolder -ne "$LocalScriptsFolder") {
-        $updateFile = Test-UpdateAvailable -Url $UpdateUrl
-        if ($updateFile) {
-            Update-SelfScript -TempFile $updateFile
-            # Script will restart, so execution stops here
-        }
+    if (IsProductionEnvironment) {
+        Write-Host "Running in Production environment." -ForegroundColor Gray
+        Import-Module (Join-Path $PSScriptRoot '\Src\ShTools.Core\ShTools.Core.psd1') -Force
     } else {
-        Write-Host "Self-update skipped." -ForegroundColor Yellow
+        Write-Host "Running in Development environment." -ForegroundColor Gray
+        Import-Module (Join-Path $PSScriptRoot $LocalScriptsFolder 'ShTools.Core\ShTools.Core.psd1') -Force
     }
+
+
+    # Step: Configure shtools.config.json in root
+    Configure-ShtoolsConfigIfNotExists -ConfigPath $configPath -ScriptsFolder $LocalScriptsFolder
+
+
     Write-Host "All tasks completed." -ForegroundColor Cyan
 
 ## End of Script

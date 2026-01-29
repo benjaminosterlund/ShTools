@@ -3,7 +3,8 @@ function Select-DotnetProject {
     [CmdletBinding()]
     param(
         [string]$ProjectPath,
-        [string]$SearchRoot = (Join-Path $PSScriptRoot '..\..\..')
+        [string]$SearchRoot = (Join-Path $PSScriptRoot '..\..\..'),
+        [string]$Prompt = 'Select .NET project'
     )
 
     if ($ProjectPath) {
@@ -30,7 +31,7 @@ function Select-DotnetProject {
     Import-Module PSMenu -ErrorAction Stop
 
     $selection = $candidates.FullName |
-    Show-Menu -Title 'Select .NET project'
+    Show-Menu -Title $Prompt
 
     if ($selection) {
         return $selection
@@ -43,7 +44,8 @@ function Select-DotnetProjects {
     [CmdletBinding()]
     param(
         [string[]]$ProjectPath,
-        [string]$SearchRoot = (Join-Path $PSScriptRoot '..\..\..\')
+        [string]$SearchRoot = (Join-Path $PSScriptRoot '..\..\..\'),
+         [string]$Prompt = 'Select .NET project(s)'
     )
 
     # Explicit path(s)
@@ -84,13 +86,13 @@ function Select-DotnetProjects {
     if (-not $cmd) { throw 'PSMenu is installed but Show-Menu was not found.' }
 
     if ($cmd.Parameters.ContainsKey('MultiSelect')) {
-        $selection = $candidates.FullName | Show-Menu -Title 'Select .NET project(s)' -MultiSelect
+        $selection = $candidates.FullName | Show-Menu -Title $Prompt -MultiSelect
     }
     else {
         # Fallback: ask repeatedly
         $selection = @()
         while ($true) {
-            $picked = $candidates.FullName | Show-Menu -Title 'Select a .NET project (Cancel to stop)'
+            $picked = $candidates.FullName | Show-Menu -Title "$Prompt (Cancel to stop)"
             if (-not $picked) { break }
             $selection += $picked
             $selection = $selection | Select-Object -Unique
