@@ -330,7 +330,7 @@ function IsProductionEnvironment {
 
 
     # Step: Configure shtools.config.json in root
-    Configure-ShtoolsConfigIfNotExists -ConfigPath $configPath -ScriptsFolder $LocalScriptsFolder
+    # Configure-ShtoolsConfigIfNotExists -ConfigPath $configPath -ScriptsFolder $LocalScriptsFolder
 
 
     Write-Host "All tasks completed." -ForegroundColor Cyan
