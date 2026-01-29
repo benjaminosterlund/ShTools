@@ -322,10 +322,10 @@ function IsProductionEnvironment {
 
     if (IsProductionEnvironment) {
         Write-Host "Running in Production environment." -ForegroundColor Gray
-        Import-Module (Join-Path $PSScriptRoot '\Src\ShTools.Core\ShTools.Core.psd1') -Force
+        Import-Module (Join-Path $PSScriptRoot $LocalScriptsFolder 'ShTools.Core\ShTools.Core.psd1') -Force
     } else {
         Write-Host "Running in Development environment." -ForegroundColor Gray
-        Import-Module (Join-Path $PSScriptRoot $LocalScriptsFolder 'ShTools.Core\ShTools.Core.psd1') -Force
+        Import-Module (Join-Path $PSScriptRoot '\Src\ShTools.Core\ShTools.Core.psd1') -Force
     }
 
 
