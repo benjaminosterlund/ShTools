@@ -334,7 +334,7 @@ function IsProductionEnvironment {
 
 
     # Step: Remove Backup
-    $backupPath = \"$ScriptPath.backup\"
+    $backupPath = "$ScriptPath.backup"
     if (Test-Path $backupPath) {
         Remove-Item $backupPath -Force
     }
