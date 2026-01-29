@@ -267,8 +267,6 @@ function IsProductionEnvironment {
         $updateFile = Test-UpdateAvailable -Url $UpdateUrl
         if ($updateFile) {
             Update-SelfScriptAndRestart -TempFile $updateFile
-        }else{
-            Write-Host "No updates found." -ForegroundColor Gray
         }
         
     } else {
