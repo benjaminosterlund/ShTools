@@ -262,6 +262,8 @@ function IsProductionEnvironment {
 
     # Step: Self-update (Always at end to avoid interruptions)
     # Dynamically detect if the parent folder is 'ShTools'
+
+
     $parentFolder = Split-Path -Path $ScriptPath -Parent | Split-Path -Leaf
     if (IsProductionEnvironment) {
         $updateFile = Test-UpdateAvailable -Url $UpdateUrl
@@ -331,6 +333,13 @@ function IsProductionEnvironment {
     # Configure-ShtoolsConfigIfNotExists -ConfigPath $configPath -ScriptsFolder $LocalScriptsFolder
 
 
+    # Step: Remove Backup
+    $backupPath = \"$ScriptPath.backup\"
+    if (Test-Path $backupPath) {
+        Remove-Item $backupPath -Force
+    }
+
+    # Step: Final Message
     Write-Host "All tasks completed." -ForegroundColor Cyan
 
 ## End of Script
