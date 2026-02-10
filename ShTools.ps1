@@ -165,7 +165,11 @@ function Install-ScriptInfos{
             New-Item -Path $localDir -ItemType Directory -Force | Out-Null
         }
 
-        $result = Install-OrUpdateScript -Url:$scriptInfo.download_url -FileName:$scriptInfo.name -DestinationFolder:$localDir
+        if ($scriptInfo.PSObject.Properties.Name -contains "local_full_path") {
+            $result = Install-OrUpdateScript -LocalPath:$scriptInfo.local_full_path -FileName:$scriptInfo.name -DestinationFolder:$localDir
+        } else {
+            $result = Install-OrUpdateScript -Url:$scriptInfo.download_url -FileName:$scriptInfo.name -DestinationFolder:$localDir
+        }
 
         if ($result) {
             $successCount++
@@ -270,9 +274,42 @@ function Get-ScriptInfosFromGithub {
         }
 }
 
+function Download-Script {
+    param(
+        [string]$Url,
+        [string]$DestinationPath
+    )
+    
+    try {
+        Invoke-WebRequest -Uri $Url -OutFile $DestinationPath -UseBasicParsing
+        return $true
+    }
+    catch {
+        Write-Warning "  ✗ Failed to download from $Url`: $_"
+        return $false
+    }
+}
+
+function Install-Script {
+    param(
+        [string]$SourcePath,
+        [string]$DestinationPath
+    )
+    
+    try {
+        Copy-Item -Path $SourcePath -Destination $DestinationPath -Force
+        return $true
+    }
+    catch {
+        Write-Warning "  ✗ Failed to install script to $DestinationPath`: $_"
+        return $false
+    }
+}
+
 function Install-OrUpdateScript {
     param(
         [string]$Url,
+        [string]$LocalPath,
         [string]$FileName,
         [string]$DestinationFolder
     )
@@ -287,11 +324,17 @@ function Install-OrUpdateScript {
         
         $destinationPath = Join-Path $DestinationFolder $FileName
         
-        # Download or update the script
-        Invoke-WebRequest -Uri $Url -OutFile $destinationPath -UseBasicParsing
+        # Copy from local path or download from URL
+        if ($LocalPath) {
+            $result = Install-Script -SourcePath $LocalPath -DestinationPath $destinationPath
+        } else {
+            $result = Download-Script -Url $Url -DestinationPath $destinationPath
+        }
         
-        Write-Host "  ✓ Installed/Updated: $FileName" -ForegroundColor Green
-        return $true
+        if ($result) {
+            Write-Host "  ✓ Installed/Updated: $FileName" -ForegroundColor Green
+        }
+        return $result
     }
     catch {
         Write-Warning "  ✗ Failed to install/update $FileName`: $_"
