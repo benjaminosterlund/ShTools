@@ -3,7 +3,7 @@ function Select-DotnetProject {
     [CmdletBinding()]
     param(
         [string]$ProjectPath,
-        [string]$SearchRoot = (Join-Path $PSScriptRoot '..\..\..'),
+        [string]$SearchRoot = (Join-Path $PSScriptRoot '..\..\..\'),
         [string]$Prompt = 'Select .NET project'
     )
 
