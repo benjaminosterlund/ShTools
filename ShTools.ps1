@@ -132,12 +132,12 @@ function Update-AllToolingScripts {
     )
     if ($LocalSource) {
         Write-Host "Using local source directory for scripts: $LocalSource" -ForegroundColor Yellow
+        $scriptInfos = Get-ScriptInfosFromLocalSource -LocalSourceRepoDir:$LocalSource
     } else {
         Write-Host "Using GitHub repository as source for scripts." -ForegroundColor Yellow
+        $scriptInfos = Get-ScriptInfosFromGithub -RepoOwner:$RepoOwner -RepoName:$RepoName -SourceFolderDirName:$SourceFolderDirName -LocalSource:$LocalSource
     }
 
-    $scriptInfos = Get-ScriptInfosFromSource -RepoOwner:$RepoOwner -RepoName:$RepoName -SourceFolderDirName:$SourceFolderDirName -LocalSource:$LocalSource
-    
     Install-ScriptInfos -ScriptInfos:$scriptInfos -ToolingDirName:$ToolingDirName
 }
 
@@ -213,6 +213,10 @@ function Get-ScriptInfosFromLocalSource {
     return $allScripts
 }
 
+function Test-GhCliAvailable {
+    param()
+    return Get-Command gh -ErrorAction SilentlyContinue
+}
 function Get-ScriptInfosFromGithub {
     param(
         [string]$RepoOwner = "benjaminosterlund",
@@ -223,9 +227,12 @@ function Get-ScriptInfosFromGithub {
     $allScripts = @()
         try {
 
-            if (Get-Command gh -ErrorAction SilentlyContinue) {
+            if (Test-GhCliAvailable) {
                 Write-Host "Using gh CLI to fetch script list." -ForegroundColor Gray
-                 $response = gh api repos/benjaminosterlund/ShTools/contents/Src | ConvertFrom-Json
+
+
+                $response = gh api repos/$RepoOwner/$RepoName/contents/$SourceFolderDirName | ConvertFrom-Json
+
             } else {
                 Write-Host "gh CLI not found, falling back to REST API." -ForegroundColor Yellow
         
@@ -235,10 +242,10 @@ function Get-ScriptInfosFromGithub {
                     'Accept' = 'application/vnd.github+json'
                     'User-Agent' = "PowerShell-$RepoName"
                 }
+                $response = Invoke-RestMethod -Uri $apiUrl -Headers $headers
             }
 
-            $response = Invoke-RestMethod -Uri $apiUrl -Headers $headers
-
+     
 
             foreach ($item in $response) {
                 if ($item.type -eq "file") {
