@@ -1,4 +1,5 @@
 param(
+    [switch]$Configure,  # Configure shtools.config.json
     [switch]$SkipSelfUpdate,  # Skip self-update check
     [string]$LocalSourceDir = $null  # Optional local source directory for development
 )
@@ -17,8 +18,60 @@ $ScriptsRepoUrl = "https://raw.githubusercontent.com/$repoOwner/$shToolsRepoName
 $ScriptUrl = "https://raw.githubusercontent.com/$repoOwner/$shToolsRepoName/refs/heads/main/ShTools.ps1"  # URL to download script updates
 
 
-#region Self-Update Functions
 
+
+
+#region Banner
+function Show-ShToolsBanner {
+    [CmdletBinding()]
+    param(
+        [string]$Version = "1.0.0",
+        [string]$ToolName = "ShTools",
+        [string]$Subtitle = "Project Architecture Tooling",
+        [string]$Author = "Benjamin Österlund",
+        [string]$Repo = "github.com/benjaminosterlund/ShTools",
+        [switch]$NoColor
+    )
+
+    $width = 54
+
+    function Format-Line {
+        param([string]$Text)
+        $contentWidth = $width - 4
+        $padded = $Text.PadRight($contentWidth)
+        return "│  $padded  │"
+    }
+
+    $top    = "┌" + ("─" * ($width - 2)) + "┐"
+    $bottom = "└" + ("─" * ($width - 2)) + "┘"
+
+    $lines = @(
+        $top
+        (Format-Line $ToolName)
+        (Format-Line $Subtitle)
+        (Format-Line "")
+        (Format-Line "Version : $Version")
+        (Format-Line "Author  : $Author")
+        (Format-Line "Repo    : $Repo")
+        $bottom
+    )
+
+    if (-not $NoColor -and $PSStyle) {
+        $accent = $PSStyle.Foreground.BrightCyan
+        $reset  = $PSStyle.Reset
+        $lines = $lines | ForEach-Object {
+            if ($_ -match "ShTools") {
+                $_ -replace $ToolName, "$accent$ToolName$reset"
+            }
+            else { $_ }
+        }
+    }
+
+    $lines -join "`n"
+}
+#endregion
+
+#region Self-Update Functions
 function Test-SelfUpdate{
     param(
         [switch]$SkipSelfUpdate
@@ -72,7 +125,6 @@ function Test-SelfUpdateAvailable {
         return $null
     }
 }
-
 function Update-SelfScriptAndRestart {
     param(
         [string]$TempFile,
@@ -151,8 +203,12 @@ function Install-ScriptInfos{
         Write-Host "No scripts available to update or install." -ForegroundColor Yellow
         return
     }
-    
-    Write-Host "`nUpdating or installing scripts..." -ForegroundColor Cyan
+
+    # Clear existing scripts
+    Write-Host "Clearing existing scripts in $ToolingDirName..." -ForegroundColor Yellow
+    Remove-Item -Path (Join-Path $PsScriptRoot $ToolingDirName) -Recurse -Force -ErrorAction SilentlyContinue
+
+    Write-Host "Updating/installing $($ScriptInfos.Count) script(s)..." -ForegroundColor Cyan
     
     $successCount = 0
     $failCount = 0
@@ -315,7 +371,7 @@ function Install-OrUpdateScript {
     )
     
     try {
-        Write-Host "  Installing/updating: $FileName" -ForegroundColor Gray
+        # Write-Host "  Installing/updating: $FileName" -ForegroundColor Gray
         
         # Ensure destination folder exists
         if (-not (Test-Path $DestinationFolder)) {
@@ -346,47 +402,24 @@ function Install-OrUpdateScript {
 
 #endregion
 
-
 #region Configuration Functions
-function Set-ShtoolsConfigIfAbsent {
+
+function Import-ShToolsCoreModule {
     param(
-        [string]$ScriptsFolder
+        [string]$ScriptRoot,
+        [string]$ToolingDirectoryName
     )
-
-    $configPath = Join-Path $PsScriptRoot "shtools.config.json"
-
-    if (Test-Path $configPath) {
-        Write-Host "Configuration file exists: $configPath" -ForegroundColor Gray
-        return
+    if (Test-ProductionEnvironment) {
+        Write-Host "Running in Production environment." -ForegroundColor Gray
+        Import-Module (Join-Path $ScriptRoot $ToolingDirectoryName 'ShTools.Core\ShTools.Core.psd1') -Force
     }
-
-    if ((Read-Host "Would you like to create a configuration file now? (Y/n)" -Default "Y") -match '^[Yy]') {
-
-        $projectPath = $null
-        $testProjectPath = $null
-
-        if ((Read-Host "Configure .NET projects? (Y/n)" -Default "Y") -match '^[Yy]') {
-            $projectPath = Select-DotnetProject -Prompt "Select main .NET project"
-            $testProjectPath = Select-DotnetProjects -Prompt "Select test .NET project(s)"
-        }
-
-        $config = @{
-            version         = "1.0"
-            lastUpdate      = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
-            scriptsFolder   = $ScriptsFolder
-            autoUpdate      = $true
-            projectPath     = $projectPath
-            testProjectPath = @($testProjectPath)
-        }
-
-        $config | ConvertTo-Json | Set-Content -Path:$configPath
-        Write-Host "✓ Configuration file created: $configPath" -ForegroundColor Green
+    else {
+        Write-Host "Running in Development environment." -ForegroundColor Gray
+        Import-Module (Join-Path $ScriptRoot 'Src\ShTools.Core\ShTools.Core.psd1') -Force
     }
 }
-
+    
 #endregion
-
-
 
 #region Helper Functions
 function Test-DevelopmentEnvironment {
@@ -450,85 +483,97 @@ function Use-GitIgnoreForScriptsFolder {
     Write-Host ""
 }
 
-    function Import-ShToolsCoreModule {
-        param(
-            [string]$ScriptRoot,
-            [string]$ToolingDirectoryName
-        )
-        if (Test-ProductionEnvironment) {
-            Write-Host "Running in Production environment." -ForegroundColor Gray
-            Import-Module (Join-Path $ScriptRoot $ToolingDirectoryName 'ShTools.Core\ShTools.Core.psd1') -Force
-        } else {
-            Write-Host "Running in Development environment." -ForegroundColor Gray
-            Import-Module (Join-Path $ScriptRoot 'Src\ShTools.Core\ShTools.Core.psd1') -Force
-        }
-    }
+
+
+    
 #endregion
 
 ## Main Execution Flow
-Write-Host "=== ShTools Script Manager ===" -ForegroundColor Cyan
-Write-Host ""
+# Write-Host "=== ShTools Script Manager ===" -ForegroundColor Cyan
+# Write-Host ""
+
+Show-ShToolsBanner
+
+if(-Not $Configure) {
+    Write-Host "Starting installation process..." -ForegroundColor Cyan
+
+    # Main execution with rollback on error
+    $backupPath = "$ScriptPath.backup"
+    $mainSucceeded = $false
+    $rollbackAttempted = $false
+    try {
+        # Step: Self-update, ensure latest version
+        Test-SelfUpdate -SkipSelfUpdate:$SkipSelfUpdate
+
+        # Step: Ensure local tooling folder exists
+        Test-ToolingDirectoryExists -Dir:(Join-Path $PSScriptRoot $toolingDirectoryName)
+
+        # Step: Check and update .gitignore if needed
+        Use-GitIgnoreForScriptsFolder -ToolingDirName:$toolingDirectoryName
+
+        if (Get-Command gh -ErrorAction SilentlyContinue) {
+            # Write-Host "gh.exe is installed" -ForegroundColor Green
+        } else {
+            Write-Host "It is recommended to install GitHub CLI (gh) for full functionality." -ForegroundColor Yellow
+            Write-Host "Install via winget: winget install --id GitHub.cli -e" -ForegroundColor Yellow
+            Write-Host "Or download from: https://cli.github.com/" -ForegroundColor Yellow
+        }
+
+
+        # Step: Update or install scripts
+        Update-AllToolingScripts -ToolingDirName:$toolingDirectoryName -RepoOwner:$repoOwner -RepoName:$shToolsRepoName -LocalSource:$LocalSourceDir
 
 
 
 
 
-# Main execution with rollback on error
-$backupPath = "$ScriptPath.backup"
-$mainSucceeded = $false
-$rollbackAttempted = $false
-try {
-    # Step: Self-update, ensure latest version
-    Test-SelfUpdate -SkipSelfUpdate:$SkipSelfUpdate
-
-    # Step: Ensure local tooling folder exists
-    Test-ToolingDirectoryExists -Dir:(Join-Path $PSScriptRoot $toolingDirectoryName)
-
-    # Step: Check and update .gitignore if needed
-    Use-GitIgnoreForScriptsFolder -ToolingDirName:$toolingDirectoryName
-
-
-
-
-    if (Get-Command gh -ErrorAction SilentlyContinue) {
-        # Write-Host "gh.exe is installed" -ForegroundColor Green
-    } else {
-        Write-Host "It is recommended to install GitHub CLI (gh) for full functionality." -ForegroundColor Yellow
-        Write-Host "Install via winget: winget install --id GitHub.cli -e" -ForegroundColor Yellow
-        Write-Host "Or download from: https://cli.github.com/" -ForegroundColor Yellow
+        $mainSucceeded = $true
+    }
+    catch {
+        Write-Error "An error occurred: $_"
+        # Attempt rollback if backup exists
+        if (Test-Path $backupPath) {
+            try {
+                Copy-Item -Path $backupPath -Destination $ScriptPath -Force
+                Write-Host "Restored script from backup due to error." -ForegroundColor Yellow
+                $rollbackAttempted = $true
+            }
+            catch {
+                Write-Error "Failed to restore script from backup: $_"
+            }
+        }
+        throw
+    }
+    finally {
+        # Remove backup if everything succeeded, or after rollback attempt on failure
+        if ((Test-Path $backupPath) -and ($mainSucceeded -or $rollbackAttempted)) {
+            Remove-Item $backupPath -Force
+        }
+        # Write-Host "Installation completed." -ForegroundColor Cyan
     }
 
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor DarkGray
+    Write-Host "  ✔ Installation completed successfully" -ForegroundColor Green
+    Write-Host "========================================" -ForegroundColor DarkGray
+    Write-Host ""
 
-    # Step: Update or install scripts
-    Update-AllToolingScripts -ToolingDirName:$toolingDirectoryName -RepoOwner:$repoOwner -RepoName:$shToolsRepoName -LocalSource:$LocalSourceDir
+    Write-Host "To configure this project, run:" -ForegroundColor Yellow
+    Write-Host "    .\shtools.ps1 -Configure" -ForegroundColor Cyan
+    Write-Host ""
 
+}
+
+
+
+if($Configure) {
+
+    Write-Host "Starting configuration process..." -ForegroundColor Cyan
 
     # Step: Configure shtools.config.json in root
     Import-ShToolsCoreModule -ScriptRoot $PSScriptRoot -ToolingDirectoryName $toolingDirectoryName
-    Set-ShtoolsConfigIfAbsent -ScriptsFolder $toolingDirectoryName
+    Set-Configuration -RootDirectory $PSScriptRoot -ToolingDirectory $toolingDirectoryName
 
-    $mainSucceeded = $true
 }
-catch {
-    Write-Error "An error occurred: $_"
-    # Attempt rollback if backup exists
-    if (Test-Path $backupPath) {
-        try {
-            Copy-Item -Path $backupPath -Destination $ScriptPath -Force
-            Write-Host "Restored script from backup due to error." -ForegroundColor Yellow
-            $rollbackAttempted = $true
-        }
-        catch {
-            Write-Error "Failed to restore script from backup: $_"
-        }
-    }
-    throw
-}
-finally {
-    # Remove backup if everything succeeded, or after rollback attempt on failure
-    if ((Test-Path $backupPath) -and ($mainSucceeded -or $rollbackAttempted)) {
-        Remove-Item $backupPath -Force
-    }
-    Write-Host "All tasks completed." -ForegroundColor Cyan
-}
+
 ## End of Script
