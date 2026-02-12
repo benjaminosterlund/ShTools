@@ -14,7 +14,8 @@
 
     RequiredModules = @(
         'Pester',
-        @{ ModuleName = 'PSMenu'; ModuleVersion = '0.2.0' }
+        @{ ModuleName = 'PSMenu'; ModuleVersion = '0.2.0' },
+        'SimplySql'
     )
 
     PrivateData = @{
