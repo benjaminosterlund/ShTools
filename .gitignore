@@ -363,3 +363,14 @@ MigrationBackup/
 FodyWeavers.xsd
 # ShTools - Downloaded scripts
 ShTools/*
+
+# Config files created during testing
+shtools.config.json
+ghproject.config.json
+
+tmpclaude-*
+
+
+
+ShTools.sln
+TestCsProj/*
