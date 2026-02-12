@@ -1,0 +1,1 @@
+& .\..\ShTools.ps1 -SkipSelfUpdate -LocalSourceDir:".\"

@@ -1,1 +1,1 @@
-& .\..\ShTools.ps1
+& .\..\ShTools.ps1 -SkipSelfUpdate
