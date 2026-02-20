@@ -24,6 +24,7 @@ if (Test-Path $PublicPath) {
 # }
 
 
+
 # Dot-source public files first
 $publicFiles = Get-ChildItem $PublicPath -Filter '*.ps1' -Recurse
 foreach ($f in $publicFiles) { . $f.FullName }

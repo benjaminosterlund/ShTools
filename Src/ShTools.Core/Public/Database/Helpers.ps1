@@ -460,7 +460,7 @@ function Test-DatabaseConnection {
     }
 }
 
-function Ensure-Prerequisites {
+function Test-Prerequisites {
     <#
     .SYNOPSIS
     Ensures all prerequisites for the RecipesApi project are met.

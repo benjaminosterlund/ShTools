@@ -55,3 +55,18 @@ function Import-PSMenuIfAvailable {
         return $false
     }
 }
+
+
+
+function Install-RequiredModules {
+    <#
+    .SYNOPSIS
+        Ensures all required modules are installed and imported.
+    .DESCRIPTION
+        Checks for required modules and installs them if missing, with user consent.
+    #>
+    $requiredModules = @('PSMenu', 'SimplySql')
+    foreach ($mod in $requiredModules) {
+          Install-RequiredModule -Name $mod -Install
+    }
+}

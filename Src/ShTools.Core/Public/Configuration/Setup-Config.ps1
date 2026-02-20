@@ -8,13 +8,38 @@ function Set-Configuration {
 
     $configPath = Join-Path $RootDirectory "shtools.config.json"
 
-    if (-not (Get-Module -ListAvailable PSMenu)) {
-        throw "PSMenu is required for interactive selections. Install it with: Install-Module PSMenu -Scope CurrentUser"
+  
+    if (-not (Initialize-ConfigFile -Path $configPath)) {
+        return
     }
 
-    Import-Module PSMenu -ErrorAction Stop
+    $menuOptions = @(
+        "Core settings",
+        "GitHub settings",
+        ".NET settings",
+        "LocalDb settings",
+        "Save and exit"
+    )
 
-    function Show-MenuWithTitle {
+    while ($true) {
+        $currentConfig = Get-ShToolsConfig -ConfigPath $configPath
+        $selection = Show-MenuWithTitle -Title "ShTools configuration" -Options $menuOptions
+
+        switch ($selection) {
+            "Core settings" { Update-CoreSection -ConfigPath $configPath -ToolingDirectory $ToolingDirectory -CurrentConfig $currentConfig }
+            "GitHub Projects settings" { Update-GitHubSection -ConfigPath $configPath -CurrentConfig $currentConfig }
+            ".NET settings" { Update-DotnetSection -ConfigPath $configPath -CurrentConfig $currentConfig -RootDirectory $RootDirectory }
+            "LocalDb settings" { Update-LocalDbSection -ConfigPath $configPath -CurrentConfig $currentConfig -RootDirectory $RootDirectory }
+            "Save and exit" { break }
+            default { break }
+        }
+    }
+}
+
+
+
+
+  function Show-MenuWithTitle {
         param(
             [Parameter(Mandatory)]
             [string]$Title,
@@ -39,7 +64,7 @@ function Set-Configuration {
         return $Options | Show-Menu 
     }
 
-    function Ensure-ConfigFile {
+    function Initialize-ConfigFile {
         param([string]$Path)
 
         if (Test-Path $Path) {
@@ -149,15 +174,6 @@ function Set-Configuration {
             [int]$ProjectNumber
         )
 
-
-
-
-        # Get current values or initialize empty section
-        $currentGitHub = if ($CurrentConfig -and $CurrentConfig.PSObject.Properties.Name -contains "github") {
-            $CurrentConfig.github
-        } else {
-            [PSCustomObject]@{}
-        }
 
 
 
@@ -309,30 +325,3 @@ function Set-Configuration {
             projectPath = $projectPath
         }
     }
-
-    if (-not (Ensure-ConfigFile -Path $configPath)) {
-        return
-    }
-
-    $menuOptions = @(
-        "Core settings",
-        "GitHub settings",
-        ".NET settings",
-        "LocalDb settings",
-        "Save and exit"
-    )
-
-    while ($true) {
-        $currentConfig = Get-ShToolsConfig -ConfigPath $configPath
-        $selection = Show-MenuWithTitle -Title "ShTools configuration" -Options $menuOptions
-
-        switch ($selection) {
-            "Core settings" { Update-CoreSection -ConfigPath $configPath -ToolingDirectory $ToolingDirectory -CurrentConfig $currentConfig }
-            "GitHub Projects settings" { Update-GitHubSection -ConfigPath $configPath -CurrentConfig $currentConfig }
-            ".NET settings" { Update-DotnetSection -ConfigPath $configPath -CurrentConfig $currentConfig -RootDirectory $RootDirectory }
-            "LocalDb settings" { Update-LocalDbSection -ConfigPath $configPath -CurrentConfig $currentConfig -RootDirectory $RootDirectory }
-            "Save and exit" { break }
-            default { break }
-        }
-    }
-}
