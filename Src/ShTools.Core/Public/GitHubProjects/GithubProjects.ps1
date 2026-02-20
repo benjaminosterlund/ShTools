@@ -3,43 +3,11 @@
 .SYNOPSIS
   PowerShell module for automating GitHub Project and Issue workflows.
 .DESCRIPTION
-  Loads configuration from ghproject.config.json and provides helper functions
-  for working with GitHub CLI (gh) to manage issues and project board items.
+    Loads configuration from shtools.config.json (github section) and provides
+    helper functions for working with GitHub CLI (gh) to manage issues and
+    project board items.
 #>
 
-# --- Module Dependencies ----------------------------------------------------
-
-function Import-PSMenuIfAvailable {
-    <#
-    .SYNOPSIS
-        Import PSMenu module if available, install if needed with user consent.
-    .DESCRIPTION
-        Checks for PSMenu module and imports it for better interactive menus.
-        If not found, offers to install it from PowerShell Gallery.
-    #>
-    try {
-        if (Get-Module -Name PSMenu -ListAvailable -ErrorAction SilentlyContinue) {
-            Import-Module PSMenu -Force -ErrorAction SilentlyContinue
-            return $true
-        } else {
-            Write-Host "📋 PSMenu module not found. This provides better interactive menus." -ForegroundColor Yellow
-            $install = Read-Host "Install PSMenu from PowerShell Gallery? (y/N)"
-            if ($install -eq 'y' -or $install -eq 'Y') {
-                Write-Host "Installing PSMenu..." -ForegroundColor Cyan
-                Install-Module -Name PSMenu -Scope CurrentUser -Force
-                Import-Module PSMenu -Force
-                Write-Host "✅ PSMenu installed and imported!" -ForegroundColor Green
-                return $true
-            } else {
-                Write-Host "PSMenu not installed. Will use basic console menus." -ForegroundColor Gray
-                return $false
-            }
-        }
-    } catch {
-        Write-Warning "Failed to import PSMenu: $($_.Exception.Message). Using basic menus."
-        return $false
-    }
-}
 
 # --- GitHub CLI Wrapper Functions -------------------------------------------
 
@@ -157,25 +125,6 @@ function Invoke-GhIssueView {
     return gh issue view $IssueNumber --repo $Repo --json assignees --jq '.assignees | map(.login) | join(", ")' 2>$null
 }
 
-# --- Load configuration ------------------------------------------------------
-
-# Look for config in project root (two levels up from scripts/automation)
-$ConfigPath = Join-Path $PSScriptRoot '..\..\ghproject.config.json'
-if (Test-Path $ConfigPath) {
-    $Script:Config = Get-Content $ConfigPath -Raw | ConvertFrom-Json
-    $Script:GhOwner         = $Script:Config.GhOwner
-    $Script:GhProjectNumber = $Script:Config.GhProjectNumber
-    $Script:GhRepo          = $Script:Config.GhRepo
-
-    Write-Verbose "Loaded config for $($Script:Config.GhRepo) (Project $($Script:Config.GhProjectNumber))"
-    if ($Script:Config._Cache.StatusOptions) {
-        $statusCount = $Script:Config._Cache.StatusOptions.PSObject.Properties.Count
-        Write-Verbose "Status options loaded: $statusCount entries"
-    }
-} else {
-    # Config will be checked by Test-GhProjectConfig when scripts call it
-    $Script:Config = $null
-}
 
 # --- Functions ---------------------------------------------------------------
 
@@ -184,7 +133,7 @@ function Test-GhProjectConfig {
     .SYNOPSIS
         Check if GitHub Project configuration exists and show helpful error if not.
     .DESCRIPTION
-        Tests for ghproject.config.json in project root and displays a user-friendly
+        Tests for shtools.config.json in project root and displays a user-friendly
         error message with setup instructions if the file is missing.
     .PARAMETER ConfigPath
         Optional path to config file (defaults to project root)
@@ -197,8 +146,7 @@ function Test-GhProjectConfig {
     )
     
     if (-not $ConfigPath) {
-        # Default to project root (two levels up from scripts/automation)
-        $ConfigPath = Join-Path $PSScriptRoot '..\..\..\..\ghproject.config.json'
+        $ConfigPath = Get-ShToolsConfigPath
     }
     
     if (-not (Test-Path $ConfigPath)) {
@@ -206,7 +154,7 @@ function Test-GhProjectConfig {
         Write-Host "❌ GitHub Project automation not initialized!" -ForegroundColor Red
         Write-Host ""
         Write-Host "Configuration file missing: " -NoNewline -ForegroundColor Yellow
-        Write-Host "ghproject.config.json" -ForegroundColor White
+        Write-Host "shtools.config.json" -ForegroundColor White
         Write-Host ""
         Write-Host "🔧 To set up automation:" -ForegroundColor Cyan
         Write-Host "   .\Initialize-Project.ps1" -ForegroundColor Green
@@ -214,6 +162,17 @@ function Test-GhProjectConfig {
         Write-Host "💡 Or run with your project details:" -ForegroundColor Gray
         Write-Host "   .\Initialize-Project.ps1 -Owner <owner> -Repo <repo> -ProjectNumber <num>" -ForegroundColor Gray
         Write-Host ""
+        return $false
+    }
+
+    try {
+        $gh = Get-ShToolsConfig -ConfigPath $ConfigPath -Section github
+        if (-not $gh -or -not $gh.owner -or -not $gh.repo -or [int]$gh.projectNumber -le 0) {
+            Write-Host "❌ github.owner/repo/projectNumber are not configured in shtools.config.json" -ForegroundColor Red
+            return $false
+        }
+    } catch {
+        Write-Host "❌ Failed to read shtools.config.json: $($_.Exception.Message)" -ForegroundColor Red
         return $false
     }
     
@@ -225,7 +184,7 @@ function Initialize-GhProject {
     .SYNOPSIS
         Initialize GitHub Project configuration and cache field metadata.
     .DESCRIPTION
-        Creates ghproject.config.json file with project information and caches
+        Stores GitHub project settings in shtools.config.json and caches
         field metadata (including status options with IDs) to reduce API calls.
         Will not overwrite existing config unless -Force is specified.
     .PARAMETER Owner
@@ -235,9 +194,11 @@ function Initialize-GhProject {
     .PARAMETER ProjectNumber
         GitHub Project number (visible in project URL)
     .PARAMETER ConfigPath
-        Path where to create the config file (defaults to project root)
+        Path to shtools.config.json (defaults to project root)
     .PARAMETER Force
         Overwrite existing configuration file
+    .PARAMETER RefreshCache
+        Refresh project metadata cache from GitHub even when config already exists
     .EXAMPLE
         Initialize-GhProject -Owner "myorg" -Repo "myrepo" -ProjectNumber 1
     .EXAMPLE
@@ -249,35 +210,34 @@ function Initialize-GhProject {
         [Parameter(Mandatory)][string]$Repo,
         [Parameter(Mandatory)][int]$ProjectNumber,
         [string]$ConfigPath,
-        [switch]$Force
+        [switch]$Force,
+        [switch]$RefreshCache
     )
     
     if (-not $ConfigPath) {
-        # Default to project root (two levels up from scripts/automation)
-        $ConfigPath = Join-Path $PSScriptRoot '..\..\..\..\ghproject.config.json'
+        $ConfigPath = Get-ShToolsConfigPath
     }
     
     # Check if config already exists
     if (Test-Path $ConfigPath) {
-        if (-not $Force) {
-            Write-Host "✅ Configuration already exists: $ConfigPath" -ForegroundColor Green
-            Write-Host "Use -Force to overwrite existing configuration." -ForegroundColor Yellow
+        if (-not $Force -and -not $RefreshCache) {
+            $existingConfig = Get-ShToolsConfig -ConfigPath $ConfigPath -Section github
+            if ($existingConfig -and $existingConfig.owner -and $existingConfig.repo -and [int]$existingConfig.projectNumber -gt 0) {
+                Write-Host "✅ Configuration already exists: $ConfigPath" -ForegroundColor Green
+                Write-Host "Use -Force to overwrite existing configuration, or -RefreshCache to re-sync metadata." -ForegroundColor Yellow
             
-            # Show current config info
-            try {
-                $existingConfig = Get-Content $ConfigPath -Raw | ConvertFrom-Json
                 Write-Host "`nCurrent configuration:" -ForegroundColor Cyan
-                Write-Host "  Owner: $($existingConfig.GhOwner)" -ForegroundColor Gray
-                Write-Host "  Repo: $($existingConfig.GhRepo)" -ForegroundColor Gray
-                Write-Host "  Project: $($existingConfig.GhProjectNumber)" -ForegroundColor Gray
-                if ($existingConfig._Cache.LastUpdated) {
-                    Write-Host "  Cache Updated: $($existingConfig._Cache.LastUpdated)" -ForegroundColor Gray
+                Write-Host "  Owner: $($existingConfig.owner)" -ForegroundColor Gray
+                Write-Host "  Repo: $($existingConfig.repo)" -ForegroundColor Gray
+                Write-Host "  Project: $($existingConfig.projectNumber)" -ForegroundColor Gray
+                if ($existingConfig._cache.LastUpdated) {
+                    Write-Host "  Cache Updated: $($existingConfig._cache.LastUpdated)" -ForegroundColor Gray
                 }
-            } catch {
-                Write-Host "  (Could not read existing config details)" -ForegroundColor Red
-            }
             
-            return $existingConfig
+                return $existingConfig
+            }
+        } elseif ($RefreshCache -and -not $Force) {
+            Write-Host "♻️ Refreshing GitHub project metadata cache..." -ForegroundColor Yellow
         } else {
             Write-Host "⚠️  Overwriting existing configuration..." -ForegroundColor Yellow
         }
@@ -342,12 +302,13 @@ function Initialize-GhProject {
         Write-Host "✅ Status order (left to right): $($statusOrder -join ' → ')" -ForegroundColor Green
         
         # Create comprehensive config
-        $config = @{
-            GhOwner = $Owner
-            GhProjectNumber = $ProjectNumber
-            GhRepo = "$Owner/$Repo"
-            # Cache for efficiency
-            _Cache = @{
+        # Save configuration
+        Write-Host "`n💾 Saving configuration..." -ForegroundColor Yellow
+        Set-ShToolsConfig -ConfigPath $ConfigPath -Section github -Values @{
+            owner = $Owner
+            repo = $Repo
+            projectNumber = $ProjectNumber
+            _cache = @{
                 ProjectId = $projectId
                 ProjectTitle = $projectTitle
                 StatusField = @{
@@ -360,17 +321,42 @@ function Initialize-GhProject {
             }
         }
         
-        # Save configuration
-        Write-Host "`n💾 Saving configuration..." -ForegroundColor Yellow
-        $config | ConvertTo-Json -Depth 5 | Set-Content $ConfigPath -Encoding UTF8
-        
         Write-Host "✅ Configuration saved to: $ConfigPath" -ForegroundColor Green
         Write-Host "`n🎉 GitHub Project initialization complete!" -ForegroundColor Cyan
         Write-Host "You can now use:" -ForegroundColor White
         Write-Host "  .\Add-KanbanItem.ps1 - Create issues and draft items" -ForegroundColor Gray
         Write-Host "  .\Show-Kanban.ps1 - Display your kanban board" -ForegroundColor Gray
-        
-        return $config
+
+        $repoFull = Get-GhRepoFullName -Owner $Owner -Repo $Repo
+        $cache = [PSCustomObject]@{
+            ProjectId = $projectId
+            ProjectTitle = $projectTitle
+            StatusField = @{
+                Id = $statusField.id
+                Name = $statusField.name
+                Type = $statusField.type
+            }
+            StatusOptions = $statusOptionsCache
+            LastUpdated = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+        }
+        $statusMap = New-GhStatusMapFromCache -Cache $cache
+
+        $Script:Config = [PSCustomObject]@{
+            owner = $Owner
+            repo = $Repo
+            projectNumber = $ProjectNumber
+            _Cache = $cache
+            GhOwner = $Owner
+            GhProjectNumber = $ProjectNumber
+            GhRepo = $repoFull
+            GhStatusMap = $statusMap
+        }
+        $Script:GhOwner = $Owner
+        $Script:GhProjectNumber = $ProjectNumber
+        $Script:GhRepo = $repoFull
+        $Script:GhStatusMap = $statusMap
+
+        return $Script:Config
         
     } catch {
         Write-Host "❌ Initialization failed: $($_.Exception.Message)" -ForegroundColor Red
@@ -392,7 +378,7 @@ function Get-GhProjectItemIdByIssue {
     param([Parameter(Mandatory)][int]$IssueNumber)
     $items = Invoke-GhProjectItemList -ProjectNumber $Script:GhProjectNumber -Owner $Script:GhOwner
     $match = $items.items | Where-Object {
-        $_.contentType -eq "Issue" -and $_.content.number -eq $IssueNumber
+        $_.content.type -eq "Issue" -and $_.content.number -eq $IssueNumber
     }
     if ($match) { return $match.id }
     return $null
@@ -551,7 +537,7 @@ function Find-ProjectItems {
 
         # Fetch all project items
         try {
-            $items = Invoke-GhProjectItemList -ProjectNumber $Script:Config.GhProjectNumber -Owner $Script:Config.GhOwner -Limit $Limit
+            $items = Invoke-GhProjectItemList -ProjectNumber $Script:Config.projectNumber -Owner $Script:Config.owner -Limit $Limit
         }
         catch {
             Write-Warning "Failed to fetch project items: $($_.Exception.Message)"
@@ -603,7 +589,9 @@ function Find-ProjectItems {
         Write-Warning "Error in Find-ProjectItems: $($_.Exception.Message)"
         return ,[PSCustomObject[]]@()
     }
-}function Set-IssueAssignment {
+}
+
+function Set-IssueAssignment {
     <#
     .SYNOPSIS
         Assign a GitHub issue to the current user.
@@ -904,7 +892,7 @@ function Show-ProjectKanban {
     Write-Host ""
     
     # Fetch all project items
-    $items = Invoke-GhProjectItemList -ProjectNumber $Script:Config.GhProjectNumber -Owner $Script:Config.GhOwner -Limit $Limit
+    $items = Invoke-GhProjectItemList -ProjectNumber $Script:Config.projectNumber -Owner $Script:Config.owner -Limit $Limit
     if (-not $items.items) {
         Write-Host "No items found." -ForegroundColor Yellow
         return

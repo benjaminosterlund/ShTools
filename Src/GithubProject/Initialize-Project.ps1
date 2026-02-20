@@ -2,9 +2,8 @@
 .SYNOPSIS
   Initialize GitHub Project automation configuration.
 .DESCRIPTION
-  Sets up the ghproject.config.json file with project information and caches
+  Sets up the config file with project information and caches
   field metadata to improve performance of automation scripts.
-  Will not overwrite existing configuration unless -Force is specified.
 .PARAMETER Owner
   GitHub repository owner/organization name
 .PARAMETER Repo
@@ -44,16 +43,17 @@ Write-Host "`n🚀 GitHub Project Automation Setup" -ForegroundColor Cyan
 Write-Host "===================================" -ForegroundColor Cyan
 
 
+# Load existing config if available
 $ConfigPath = Join-Path $PSScriptRoot '..\..\shtools.config.json'
-$config = Get-ShToolsConfig -ConfigPath $ConfigPath -ErrorAction SilentlyContinue | Out-Null
+$config = Get-ShToolsConfig -ConfigPath $ConfigPath -ErrorAction SilentlyContinue
 
-Update-GitHubSection -ConfigPath $ConfigPath -CurrentConfig $config -Owner $Owner -Repo $Repo -ProjectNumber $ProjectNumber
 
-Set-ShToolsConfig -ConfigPath $ConfigPath -Section github -Values @{
-            owner = $Owner
-            repo = $Repo
-            projectNumber = $ProjectNumber
-}
+#Ensure GitHub section exists in config
+$resolvedGitHub = Update-GitHubSection -ConfigPath $ConfigPath -CurrentConfig $config -Owner $Owner -Repo $Repo -ProjectNumber $ProjectNumber
+$Owner = $resolvedGitHub.Owner
+$Repo = $resolvedGitHub.Repo
+$ProjectNumber = [int]$resolvedGitHub.ProjectNumber
+
 
 $confirm = Read-Host "`nProceed with initialization? (y/N)"
 if ($confirm -notlike "y*") {
@@ -62,11 +62,11 @@ if ($confirm -notlike "y*") {
 }
 
 try {
-    # Run the initialization
+    # Run the initialization, which will setup cache field metadata
     if ($Force) {
-        Initialize-GhProject -Owner $Owner -Repo $Repo -ProjectNumber $ProjectNumber -Force | Out-Null
+    Initialize-GhProject -Owner $Owner -Repo $Repo -ProjectNumber $ProjectNumber -ConfigPath $ConfigPath -Force -RefreshCache | Out-Null
     } else {
-        Initialize-GhProject -Owner $Owner -Repo $Repo -ProjectNumber $ProjectNumber | Out-Null
+    Initialize-GhProject -Owner $Owner -Repo $Repo -ProjectNumber $ProjectNumber -ConfigPath $ConfigPath -RefreshCache | Out-Null
     }
     
     Write-Host "`n✨ Next Steps:" -ForegroundColor Cyan

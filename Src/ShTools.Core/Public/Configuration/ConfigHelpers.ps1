@@ -234,6 +234,8 @@ function Get-GitHubProjectConfig {
     )
 
     # Build config from parameters or config file
+    $githubSection = Get-ShToolsConfig -Section github
+
     $config = [PSCustomObject]@{
         owner = if ($Owner) {
             $Owner
@@ -251,7 +253,7 @@ function Get-GitHubProjectConfig {
             $pn = Get-ConfigValue -Section github -Key projectNumber -EnvVar "SHTOOLS_GITHUB_PROJECT_NUMBER" -Default 0
             if ($pn -is [string]) { [int]$pn } else { $pn }
         }
-        _cache = (Get-ShToolsConfig -Section github)._cache
+        _cache = if ($githubSection) { $githubSection._cache } else { $null }
     }
 
     # Validate required fields

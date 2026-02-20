@@ -329,3 +329,102 @@ function Initialize-ShToolsConfig {
         Write-Error "Failed to save configuration: $_"
     }
 }
+
+
+
+
+# --- Load configuration ------------------------------------------------------
+
+function Get-ShToolsConfigPath {
+    [CmdletBinding()]
+    param()
+    return (Join-Path $PSScriptRoot '..\..\..\..\shtools.config.json')
+}
+
+function Get-GhRepoFullName {
+    [CmdletBinding()]
+    param(
+        [string]$Owner,
+        [string]$Repo
+    )
+
+    if (-not $Repo) {
+        return $null
+    }
+
+    if ($Repo -match '^[^/]+/[^/]+$') {
+        return $Repo
+    }
+
+    if ($Owner) {
+        return "$Owner/$Repo"
+    }
+
+    return $Repo
+}
+
+function New-GhStatusMapFromCache {
+    [CmdletBinding()]
+    param(
+        [object]$Cache
+    )
+
+    $map = @{}
+    if ($Cache -and $Cache.StatusOptions) {
+        foreach ($entry in $Cache.StatusOptions.PSObject.Properties) {
+            $map[$entry.Name] = $entry.Value.name
+        }
+    }
+
+    return [PSCustomObject]$map
+}
+
+$ConfigPath = Get-ShToolsConfigPath
+$githubConfig = $null
+if (Test-Path $ConfigPath) {
+    if (Get-Command Get-ShToolsConfig -ErrorAction SilentlyContinue) {
+        $githubConfig = Get-ShToolsConfig -ConfigPath $ConfigPath -Section github
+    } else {
+        try {
+            $rawConfig = Get-Content $ConfigPath -Raw | ConvertFrom-Json
+            $githubConfig = $rawConfig.github
+        } catch {
+            $githubConfig = $null
+        }
+    }
+}
+
+if (-not $githubConfig -and (Get-Command Get-ShToolsConfig -ErrorAction SilentlyContinue)) {
+    $githubConfig = Get-ShToolsConfig -Section github
+}
+
+if ($githubConfig) {
+    $repoFull = Get-GhRepoFullName -Owner $githubConfig.owner -Repo $githubConfig.repo
+    $cache = if ($githubConfig._cache) { $githubConfig._cache } else { [PSCustomObject]@{} }
+    $statusMap = New-GhStatusMapFromCache -Cache $cache
+
+    $Script:Config = [PSCustomObject]@{
+        owner = $githubConfig.owner
+        repo = $githubConfig.repo
+        projectNumber = [int]$githubConfig.projectNumber
+        _Cache = $cache
+        GhOwner = $githubConfig.owner
+        GhProjectNumber = [int]$githubConfig.projectNumber
+        GhRepo = $repoFull
+        GhStatusMap = $statusMap
+    }
+
+    $Script:GhOwner = $Script:Config.GhOwner
+    $Script:GhProjectNumber = $Script:Config.GhProjectNumber
+    $Script:GhRepo = $Script:Config.GhRepo
+    $Script:GhStatusMap = $statusMap
+
+    Write-Verbose "Loaded config for $($Script:Config.GhRepo) (Project $($Script:Config.GhProjectNumber))"
+    if ($Script:Config._Cache.StatusOptions) {
+        $statusCount = $Script:Config._Cache.StatusOptions.PSObject.Properties.Count
+        Write-Verbose "Status options loaded: $statusCount entries"
+    }
+} else {
+    # Config will be checked by Test-GhProjectConfig when scripts call it
+    $Script:Config = $null
+}
