@@ -93,7 +93,7 @@ function Get-ConfigValue {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [ValidateSet('github', 'localdb', 'dotnet')]
+        [ValidateSet('core', 'github', 'localdb', 'dotnet')]
         [string]$Section,
 
         [Parameter(Mandatory)]
@@ -150,7 +150,7 @@ function Test-ShToolsConfig {
     [CmdletBinding()]
     param(
         [Parameter()]
-        [ValidateSet('github', 'localdb', 'dotnet')]
+        [ValidateSet('core', 'github', 'localdb', 'dotnet')]
         [string]$Section,
 
         [Parameter()]
@@ -184,6 +184,9 @@ function Test-ShToolsConfig {
 
         # Section-specific validation
         switch ($Section) {
+            'core' {
+                return $true
+            }
             'github' {
                 $hasRequired = $config.github.owner -and
                                $config.github.repo -and

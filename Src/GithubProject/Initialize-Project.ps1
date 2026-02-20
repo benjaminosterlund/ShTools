@@ -43,42 +43,17 @@ Import-Module (Join-Path $PSScriptRoot '..\ShTools.Core\ShTools.Core.psd1') -For
 Write-Host "`n🚀 GitHub Project Automation Setup" -ForegroundColor Cyan
 Write-Host "===================================" -ForegroundColor Cyan
 
-# Interactive mode if parameters not provided
-if (-not $Owner) {
-    Write-Host "`nTo set up automation, I need some information about your GitHub project:" -ForegroundColor Yellow
-    $Owner = Read-Host "GitHub repository owner/organization"
-    if (-not $Owner.Trim()) {
-        Write-Host "Owner cannot be empty!" -ForegroundColor Red
-        exit 1
-    }
-}
 
-if (-not $Repo) {
-    $Repo = Read-Host "Repository name (without owner prefix)"
-    if (-not $Repo.Trim()) {
-        Write-Host "Repository name cannot be empty!" -ForegroundColor Red
-        exit 1
-    }
-}
+$ConfigPath = Join-Path $PSScriptRoot '..\..\shtools.config.json'
+$config = Get-ShToolsConfig -ConfigPath $ConfigPath -ErrorAction SilentlyContinue | Out-Null
 
-if (-not $ProjectNumber) {
-    Write-Host "`nYou can find the project number in the project URL:" -ForegroundColor Gray
-    Write-Host "https://github.com/users/$Owner/projects/[PROJECT_NUMBER]" -ForegroundColor Gray
-    do {
-        $projectInput = Read-Host "GitHub Project number"
-        if ($projectInput -and $projectInput -match '^\d+$') {
-            $ProjectNumber = [int]$projectInput
-        } else {
-            Write-Host "Please enter a valid project number." -ForegroundColor Red
-        }
-    } while (-not $ProjectNumber)
-}
+Update-GitHubSection -ConfigPath $ConfigPath -CurrentConfig $config -Owner $Owner -Repo $Repo -ProjectNumber $ProjectNumber
 
-Write-Host "`n📋 Configuration Summary:" -ForegroundColor Yellow
-Write-Host "Owner: $Owner" -ForegroundColor White
-Write-Host "Repository: $Repo" -ForegroundColor White  
-Write-Host "Project Number: $ProjectNumber" -ForegroundColor White
-Write-Host "Full Repository: $Owner/$Repo" -ForegroundColor White
+Set-ShToolsConfig -ConfigPath $ConfigPath -Section github -Values @{
+            owner = $Owner
+            repo = $Repo
+            projectNumber = $ProjectNumber
+}
 
 $confirm = Read-Host "`nProceed with initialization? (y/N)"
 if ($confirm -notlike "y*") {

@@ -147,7 +147,7 @@ function Update-SelfScriptAndRestart {
         Write-Host "Restarting script..." -ForegroundColor Cyan
         
         # Restart the script with original parameters
-        $args = $MyInvocation.BoundParameters.GetEnumerator() | ForEach-Object {
+        $arguments = $MyInvocation.BoundParameters.GetEnumerator() | ForEach-Object {
             if ($_.Value -is [switch]) {
                 if ($_.Value) { "-$($_.Key)" }
             }
@@ -156,7 +156,7 @@ function Update-SelfScriptAndRestart {
             }
         }
         
-        & $Path @args -SkipSelfUpdate
+        & $Path @arguments -SkipSelfUpdate
         exit
     }
     catch {
@@ -214,7 +214,8 @@ function Install-ScriptInfos{
     $failCount = 0
     
     foreach ($scriptInfo in $ScriptInfos) {
-        $localRelativePath = $scriptInfo.path -Replace '^Src/', "$ToolingDirName/"
+        $localRelativePath = $scriptInfo.path -Replace '^Src[/\\]', "$ToolingDirName/"
+        
         $localFullPath = Join-Path $PsScriptRoot $localRelativePath
         $localDir = Split-Path -Path $localFullPath -Parent
         if (-not (Test-Path $localDir)) {
@@ -411,7 +412,7 @@ function Import-ShToolsCoreModule {
     )
     if (Test-ProductionEnvironment) {
         Write-Host "Running in Production environment." -ForegroundColor Gray
-        Import-Module (Join-Path $ScriptRoot $ToolingDirectoryName 'ShTools.Core\ShTools.Core.psd1') -Force
+        Import-Module (Join-Path $ScriptRoot $ToolingDirectoryName '\ShTools.Core\ShTools.Core.psd1') -Force
     }
     else {
         Write-Host "Running in Development environment." -ForegroundColor Gray

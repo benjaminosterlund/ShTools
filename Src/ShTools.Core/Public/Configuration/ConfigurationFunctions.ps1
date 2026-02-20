@@ -36,7 +36,7 @@ function Get-ShToolsConfig {
         [string]$ConfigPath,
 
         [Parameter()]
-        [ValidateSet('github', 'localdb', 'dotnet')]
+        [ValidateSet('core', 'github', 'localdb', 'dotnet')]
         [string]$Section
     )
 
@@ -109,7 +109,7 @@ function Set-ShToolsConfig {
         [string]$ConfigPath,
 
         [Parameter(Mandatory)]
-        [ValidateSet('github', 'localdb', 'dotnet')]
+        [ValidateSet('core', 'github', 'localdb', 'dotnet')]
         [string]$Section,
 
         [Parameter(Mandatory)]
@@ -140,6 +140,12 @@ function Set-ShToolsConfig {
     } else {
         # Create new config with default structure
         $config = [PSCustomObject]@{
+            core = [PSCustomObject]@{
+                version = "1.0"
+                lastUpdate = ""
+                scriptsFolder = ""
+                autoUpdate = $true
+            }
             github = [PSCustomObject]@{
                 owner = ""
                 repo = ""
@@ -152,17 +158,19 @@ function Set-ShToolsConfig {
             dotnet = [PSCustomObject]@{
                 projectPath = ""
                 testProjectPath = @()
+                searchRoot = ""
             }
         }
     }
 
     # Update the specified section
-    if (-not $config.PSObject.Properties.Name -contains $Section) {
-        # Section doesn't exist, create it
-        $config | Add-Member -MemberType NoteProperty -Name $Section -Value ([PSCustomObject]@{})
+    # Ensure the section exists and is not null
+    if ($null -eq $config.$Section -or -not $config.PSObject.Properties.Name -contains $Section) {
+        # Section doesn't exist or is null, create it
+        $config | Add-Member -MemberType NoteProperty -Name $Section -Value ([PSCustomObject]@{}) -Force
     }
 
-    # Update values in section
+    # Update/add values in section
     foreach ($key in $Values.Keys) {
         $value = $Values[$key]
 
@@ -240,7 +248,7 @@ function Initialize-ShToolsConfig {
     Write-Host "GitHub Projects Configuration" -ForegroundColor Cyan
     $configureGitHub = Read-Host "Configure GitHub Projects? (Y/n)"
     if ($configureGitHub -match '^[Yy]' -or [string]::IsNullOrWhiteSpace($configureGitHub)) {
-        $config.github.owner = Read-Host "  GitHub owner/organization"
+        $config.github.owner = Read-Host "  GitHub owner (user or org)"
         $config.github.repo = Read-Host "  Repository name"
         $projectNum = Read-Host "  Project number"
         $config.github.projectNumber = if ($projectNum) { [int]$projectNum } else { 0 }
