@@ -1,23 +1,11 @@
 param(
-    [switch]$Configure,  # Configure shtools.config.json
+    [switch]$Setup,  # Configure shtools.config.json
     [switch]$SkipSelfUpdate,  # Skip self-update check
     [string]$LocalSourceDir = $null  # Optional local source directory for development
 )
 
 $ErrorActionPreference = "Stop"
 $ScriptPath = $PSCommandPath
-
-
-$PsScriptFileName = Split-Path -Path $ScriptPath -Leaf
-
-$toolingDirectoryName = "ShTools"    
-$shToolsRepoName = "ShTools"
-
-$repoOwner = "benjaminosterlund"
-$ScriptsRepoUrl = "https://raw.githubusercontent.com/$repoOwner/$shToolsRepoName/main/$toolingDirectoryName"  # Base URL for scripts folder
-$ScriptUrl = "https://raw.githubusercontent.com/$repoOwner/$shToolsRepoName/refs/heads/main/ShTools.ps1"  # URL to download script updates
-
-
 
 
 
@@ -407,22 +395,24 @@ function Install-OrUpdateScript {
 
 function Import-ShToolsCoreModule {
     param(
-        [string]$ScriptRoot,
         [string]$ToolingDirectoryName
     )
+
     if (Test-ProductionEnvironment) {
         Write-Host "Running in Production environment." -ForegroundColor Gray
-        Import-Module (Join-Path $ScriptRoot $ToolingDirectoryName '\ShTools.Core\ShTools.Core.psd1') -Force
+        Import-Module (Join-Path $PsScriptRoot $ToolingDirectoryName '\ShTools.Core\ShTools.Core.psd1') -Force
     }
     else {
         Write-Host "Running in Development environment." -ForegroundColor Gray
-        Import-Module (Join-Path $ScriptRoot 'Src\ShTools.Core\ShTools.Core.psd1') -Force
+        Import-Module (Join-Path $PsScriptRoot 'Src\ShTools.Core\ShTools.Core.psd1') -Force
     }
 }
     
 #endregion
 
 #region Helper Functions
+
+
 function Test-DevelopmentEnvironment {
     param()
     $parentFolder = Split-Path -Path $ScriptPath -Parent | Split-Path -Leaf
@@ -493,9 +483,24 @@ function Use-GitIgnoreForScriptsFolder {
 # Write-Host "=== ShTools Script Manager ===" -ForegroundColor Cyan
 # Write-Host ""
 
+
+
+
+$toolingDirectoryName = "ShTools"
+$shToolsRepoName = "ShTools"
+
+$repoOwner = "benjaminosterlund"
+$ScriptUrl = "https://raw.githubusercontent.com/$repoOwner/$shToolsRepoName/refs/heads/main/ShTools.ps1"  # URL to download script updates
+
+
+
+
+
+
+
 Show-ShToolsBanner
 
-if(-Not $Configure) {
+if(-Not $Setup) {
     Write-Host "Starting installation process..." -ForegroundColor Cyan
 
     # Main execution with rollback on error
@@ -560,20 +565,20 @@ if(-Not $Configure) {
     Write-Host ""
 
     Write-Host "To configure this project, run:" -ForegroundColor Yellow
-    Write-Host "    .\shtools.ps1 -Configure" -ForegroundColor Cyan
+    Write-Host "    .\shtools.ps1 -Setup" -ForegroundColor Cyan
     Write-Host ""
 
 }
 
-
-
-if($Configure) {
+if($Setup) {
 
     Write-Host "Starting configuration process..." -ForegroundColor Cyan
 
     # Step: Configure shtools.config.json in root
-    Import-ShToolsCoreModule -ScriptRoot $PSScriptRoot -ToolingDirectoryName $toolingDirectoryName
-    Set-Configuration -RootDirectory $PSScriptRoot -ToolingDirectory $toolingDirectoryName
+    Import-ShToolsCoreModule -ToolingDirectoryName $toolingDirectoryName
+    
+    & ".\$toolingDirectoryName\Setup.ps1"
+
 
 }
 

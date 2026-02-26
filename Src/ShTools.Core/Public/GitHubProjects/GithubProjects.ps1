@@ -9,122 +9,6 @@
 #>
 
 
-# --- GitHub CLI Wrapper Functions -------------------------------------------
-
-function Invoke-GhProjectView {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][int]$ProjectNumber,
-        [Parameter(Mandatory)][string]$Owner
-    )
-    return gh project view $ProjectNumber --owner $Owner --format json | ConvertFrom-Json
-}
-
-function Invoke-GhProjectFieldList {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][int]$ProjectNumber,
-        [Parameter(Mandatory)][string]$Owner
-    )
-    return gh project field-list $ProjectNumber --owner $Owner --format json | ConvertFrom-Json
-}
-
-function Invoke-GhProjectItemList {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][int]$ProjectNumber,
-        [Parameter(Mandatory)][string]$Owner,
-        [int]$Limit = 100
-    )
-    return gh project item-list $ProjectNumber --owner $Owner --format json --limit $Limit | ConvertFrom-Json
-}
-
-function Invoke-GhIssueCreate {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$Repo,
-        [Parameter(Mandatory)][string]$Title,
-        [string]$Body,
-        [string[]]$Labels
-    )
-    $cmd = @("issue", "create", "--repo", $Repo, "--title", $Title)
-    if ($Body) { $cmd += @("--body", $Body) }
-    if ($Labels) { $cmd += @("--label", ($Labels -join ",")) }
-    
-    # gh issue create returns the URL, we need to parse it to get issue details
-    $issueUrl = gh @cmd
-    if ($issueUrl -and $issueUrl -match '/issues/(\d+)$') {
-        $issueNumber = [int]$Matches[1]
-        # Get the issue details using gh issue view
-        return gh issue view $issueNumber --repo $Repo --json number,title,body,url,state,labels | ConvertFrom-Json
-    } else {
-        throw "Failed to create issue or parse issue URL: $issueUrl"
-    }
-}
-
-function Invoke-GhProjectItemCreate {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][int]$ProjectNumber,
-        [Parameter(Mandatory)][string]$Owner,
-        [Parameter(Mandatory)][string]$Title,
-        [string]$Body
-    )
-    $cmd = @("project", "item-create", $ProjectNumber, "--owner", $Owner, "--title", $Title, "--format", "json")
-    if ($Body) { $cmd += @("--body", $Body) }
-    return gh @cmd | ConvertFrom-Json
-}
-
-function Invoke-GhProjectItemAdd {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][int]$ProjectNumber,
-        [Parameter(Mandatory)][string]$Owner,
-        [Parameter(Mandatory)][string]$IssueUrl
-    )
-    return gh project item-add $ProjectNumber --owner $Owner --url $IssueUrl --format json | ConvertFrom-Json
-}
-
-function Invoke-GhProjectItemEdit {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][string]$ItemId,
-        [Parameter(Mandatory)][string]$ProjectId,
-        [Parameter(Mandatory)][string]$FieldId,
-        [Parameter(Mandatory)][string]$OptionId
-    )
-    return gh project item-edit --id $ItemId --project-id $ProjectId --field-id $FieldId --single-select-option-id $OptionId 2>&1
-}
-
-function Invoke-GhApiUser {
-    [CmdletBinding()]
-    param()
-    return gh api user --jq .login 2>$null
-}
-
-function Invoke-GhIssueEdit {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][int]$IssueNumber,
-        [Parameter(Mandatory)][string]$Repo,
-        [string]$AddAssignee,
-        [string]$RemoveAssignee
-    )
-    $cmd = @("issue", "edit", $IssueNumber, "--repo", $Repo)
-    if ($AddAssignee) { $cmd += @("--add-assignee", $AddAssignee) }
-    if ($RemoveAssignee) { $cmd += @("--remove-assignee", $RemoveAssignee) }
-    gh @cmd | Out-Null
-}
-
-function Invoke-GhIssueView {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][int]$IssueNumber,
-        [Parameter(Mandatory)][string]$Repo
-    )
-    return gh issue view $IssueNumber --repo $Repo --json assignees --jq '.assignees | map(.login) | join(", ")' 2>$null
-}
-
 
 # --- Functions ---------------------------------------------------------------
 
@@ -187,12 +71,6 @@ function Initialize-GhProject {
         Stores GitHub project settings in shtools.config.json and caches
         field metadata (including status options with IDs) to reduce API calls.
         Will not overwrite existing config unless -Force is specified.
-    .PARAMETER Owner
-        GitHub repository owner/organization name
-    .PARAMETER Repo
-        GitHub repository name (without owner prefix)
-    .PARAMETER ProjectNumber
-        GitHub Project number (visible in project URL)
     .PARAMETER ConfigPath
         Path to shtools.config.json (defaults to project root)
     .PARAMETER Force
@@ -206,12 +84,14 @@ function Initialize-GhProject {
     #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)][string]$Owner,
-        [Parameter(Mandatory)][string]$Repo,
-        [Parameter(Mandatory)][int]$ProjectNumber,
         [string]$ConfigPath,
+        [string]$Owner,
+        [string]$Repo,
+        [string]$Title,
+        [int]$ProjectNumber,
         [switch]$Force,
-        [switch]$RefreshCache
+        [switch]$RefreshCache,
+        [switch]$NonInteractive
     )
     
     if (-not $ConfigPath) {
@@ -242,17 +122,109 @@ function Initialize-GhProject {
             Write-Host "⚠️  Overwriting existing configuration..." -ForegroundColor Yellow
         }
     }
-    
+
+
+
+
+    $config = Get-ShToolsConfig -ConfigPath $ConfigPath
+
+    # Initialize variables from parameters or existing config
+    $owner = if ($Owner) { $Owner } else { $config.github.owner }
+    $repo = if ($Repo) { $Repo } else { $config.github.repo }
+    $title = if ($Title) { $Title } else { $config.github.title }
+    $projectNumber = if ($ProjectNumber) { $ProjectNumber } else { $config.github.projectNumber }
+
+    # If all required values exist and not forcing/refreshing, we're done
+    if ($owner -and $repo -and $projectNumber -and -not $Force -and -not $RefreshCache) {
+        Write-Host "✅ Configuration already complete" -ForegroundColor Green
+        Write-Host "  Owner: $owner" -ForegroundColor Gray
+        Write-Host "  Repo: $repo" -ForegroundColor Gray
+        Write-Host "  Project: $projectNumber" -ForegroundColor Gray
+        Write-Host "Use -Force to overwrite or -RefreshCache to update metadata." -ForegroundColor Yellow
+        
+        # Skip to metadata fetch if refreshing cache
+        if (-not $RefreshCache) {
+            return $config
+        }
+    }
+
+    # Prompt for missing values
+    if (-not $owner) {
+        if ($NonInteractive) {
+            throw "Owner is required in non-interactive mode."
+        }
+        Write-Host "Please provide the GitHub project configuration" -ForegroundColor Gray
+        $owner = Get-GitHubOwnerFromUser -Owner $owner
+    }
+
+    if (-not $repo) {
+        if ($NonInteractive) {
+            throw "Repository is required in non-interactive mode."
+        }
+        $repo = Get-GitHubRepositoryFromUser -Repo $repo
+    }
+
+    if (-not $title -and -not $projectNumber) {
+        if ($NonInteractive) {
+            throw "Either Title (for new project) or ProjectNumber is required in non-interactive mode."
+        }
+        $title = Get-GitHubProjectTitleFromUser
+    }
+
+    # Handle project creation or selection
+    if (-not $projectNumber) {
+        if ($NonInteractive) {
+            throw "ProjectNumber is required in non-interactive mode (or use interactive mode to create new project)."
+        }
+        
+        $createNew = Read-Host "Create new GitHub Project? (y/N)"
+        if ($createNew -eq 'y') {
+            if (-not $title) {
+                $title = Get-GitHubProjectTitleFromUser
+            }
+            
+            $proj = Invoke-GhProjectCreate -Owner $owner -Title $title
+            Write-Host "Created project '$($proj.name)' with number $($proj.number)" -ForegroundColor Green
+            $projectNumber = $proj.number
+        } else {
+            $projectNumber = Get-GitHubProjectNumberFromUser -ProjectNumber $projectNumber
+        }
+    }
+
+    # Save configuration (fixed: use property name strings as keys)
+    Write-Host "`n💾 Saving basic configuration..." -ForegroundColor Yellow
+    Set-ShToolsConfig -ConfigPath $ConfigPath -Section github -Key "owner" -Value $owner
+    Set-ShToolsConfig -ConfigPath $ConfigPath -Section github -Key "repo" -Value $repo
+    Set-ShToolsConfig -ConfigPath $ConfigPath -Section github -Key "projectNumber" -Value $projectNumber
+    if ($title) {
+        Set-ShToolsConfig -ConfigPath $ConfigPath -Section github -Key "title" -Value $title
+    }
+
+    # Link the project to the repository (consolidated to single call)
+    Write-Host "🔗 Linking project to repository..." -ForegroundColor Yellow
+    Invoke-GhProjectLink -ProjectNumber $projectNumber -Owner $owner -Repo $repo
+
+    # Confirm before proceeding with metadata fetch
+    if (-not $NonInteractive -and -not $RefreshCache) {
+        $confirm = Read-Host "`nFetch project metadata and cache field definitions? (Y/n)"
+        if ($confirm -like "n*") {
+            Write-Host "Initialization completed without metadata cache." -ForegroundColor Yellow
+            return Get-ShToolsConfig -ConfigPath $ConfigPath -Section github
+        }
+    }
+
+
+
     Write-Host "🔧 Initializing GitHub Project configuration..." -ForegroundColor Cyan
-    Write-Host "Owner: $Owner" -ForegroundColor Gray
-    Write-Host "Repo: $Repo" -ForegroundColor Gray
-    Write-Host "Project Number: $ProjectNumber" -ForegroundColor Gray
+    Write-Host "Owner: $owner" -ForegroundColor Gray
+    Write-Host "Repo: $repo" -ForegroundColor Gray
+    Write-Host "Project Number: $projectNumber" -ForegroundColor Gray
     Write-Host "Config Path: $ConfigPath" -ForegroundColor Gray
     
     try {
         # Test GitHub CLI access and get project info
         Write-Host "`n📡 Fetching project information..." -ForegroundColor Yellow
-        $projectInfo = Invoke-GhProjectView -ProjectNumber $ProjectNumber -Owner $Owner
+        $projectInfo = Invoke-GhProjectView -ProjectNumber $projectNumber -Owner $owner
         $projectId = $projectInfo.id
         $projectTitle = $projectInfo.title
         
@@ -260,7 +232,7 @@ function Initialize-GhProject {
         
         # Fetch and cache field information
         Write-Host "`n📋 Fetching field definitions..." -ForegroundColor Yellow
-        $fields = Invoke-GhProjectFieldList -ProjectNumber $ProjectNumber -Owner $Owner
+        $fields = Invoke-GhProjectFieldList -ProjectNumber $projectNumber -Owner $owner
         
         # Extract Status field and build enhanced mapping
         $statusField = $fields.fields | Where-Object { $_.name -eq "Status" }
@@ -302,12 +274,12 @@ function Initialize-GhProject {
         Write-Host "✅ Status order (left to right): $($statusOrder -join ' → ')" -ForegroundColor Green
         
         # Create comprehensive config
-        # Save configuration
-        Write-Host "`n💾 Saving configuration..." -ForegroundColor Yellow
+        # Save configuration with metadata cache
+        Write-Host "`n💾 Saving configuration with metadata cache..." -ForegroundColor Yellow
         Set-ShToolsConfig -ConfigPath $ConfigPath -Section github -Values @{
-            owner = $Owner
-            repo = $Repo
-            projectNumber = $ProjectNumber
+            owner = $owner
+            repo = $repo
+            projectNumber = $projectNumber
             _cache = @{
                 ProjectId = $projectId
                 ProjectTitle = $projectTitle
@@ -327,7 +299,7 @@ function Initialize-GhProject {
         Write-Host "  .\Add-KanbanItem.ps1 - Create issues and draft items" -ForegroundColor Gray
         Write-Host "  .\Show-Kanban.ps1 - Display your kanban board" -ForegroundColor Gray
 
-        $repoFull = Get-GhRepoFullName -Owner $Owner -Repo $Repo
+        $repoFull = Get-GhRepoFullName -Owner $owner -Repo $repo
         $cache = [PSCustomObject]@{
             ProjectId = $projectId
             ProjectTitle = $projectTitle
@@ -342,17 +314,17 @@ function Initialize-GhProject {
         $statusMap = New-GhStatusMapFromCache -Cache $cache
 
         $Script:Config = [PSCustomObject]@{
-            owner = $Owner
-            repo = $Repo
-            projectNumber = $ProjectNumber
+            owner = $owner
+            repo = $repo
+            projectNumber = $projectNumber
             _Cache = $cache
-            GhOwner = $Owner
-            GhProjectNumber = $ProjectNumber
+            GhOwner = $owner
+            GhProjectNumber = $projectNumber
             GhRepo = $repoFull
             GhStatusMap = $statusMap
         }
-        $Script:GhOwner = $Owner
-        $Script:GhProjectNumber = $ProjectNumber
+        $Script:GhOwner = $owner
+        $Script:GhProjectNumber = $projectNumber
         $Script:GhRepo = $repoFull
         $Script:GhStatusMap = $statusMap
 

@@ -70,3 +70,28 @@ function Install-RequiredModules {
           Install-RequiredModule -Name $mod -Install
     }
 }
+
+  function Show-MenuWithTitle {
+        param(
+            [Parameter(Mandatory)]
+            [string]$Title,
+
+            [Parameter(Mandatory)]
+            [object[]]$Options
+        )
+
+        Write-Host ""
+        Write-Host $Title -ForegroundColor Yellow
+        
+        $cmd = Get-Command Show-Menu -ErrorAction SilentlyContinue
+        if (-not $cmd) {
+            throw "PSMenu is installed but Show-Menu was not found."
+        }
+
+        # PSMenu's Show-Menu uses pipeline input or -MenuItems
+        if ($cmd.Parameters.ContainsKey('MenuItems')) {
+            return Show-Menu -MenuItems $Options
+        }
+
+        return $Options | Show-Menu 
+    }

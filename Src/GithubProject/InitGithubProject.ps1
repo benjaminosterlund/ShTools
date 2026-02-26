@@ -4,12 +4,6 @@
 .DESCRIPTION
   Sets up the config file with project information and caches
   field metadata to improve performance of automation scripts.
-.PARAMETER Owner
-  GitHub repository owner/organization name
-.PARAMETER Repo
-  Repository name (without owner prefix)
-.PARAMETER ProjectNumber
-  GitHub Project number (visible in project URL)
 .PARAMETER Force
   Overwrite existing configuration file
 .EXAMPLE
@@ -25,10 +19,6 @@
 
 [CmdletBinding()]
 param(
-    [string]$Owner,
-    [string]$Repo, 
-    [int]$ProjectNumber,
-    [switch]$Force
 )
 
 $ErrorActionPreference = 'Stop'
@@ -45,21 +35,6 @@ Write-Host "===================================" -ForegroundColor Cyan
 
 # Load existing config if available
 $ConfigPath = Join-Path $PSScriptRoot '..\..\shtools.config.json'
-$config = Get-ShToolsConfig -ConfigPath $ConfigPath -ErrorAction SilentlyContinue
-
-
-#Ensure GitHub section exists in config
-$resolvedGitHub = Update-GitHubSection -ConfigPath $ConfigPath -CurrentConfig $config -Owner $Owner -Repo $Repo -ProjectNumber $ProjectNumber
-$Owner = $resolvedGitHub.Owner
-$Repo = $resolvedGitHub.Repo
-$ProjectNumber = [int]$resolvedGitHub.ProjectNumber
-
-
-$confirm = Read-Host "`nProceed with initialization? (y/N)"
-if ($confirm -notlike "y*") {
-    Write-Host "Initialization cancelled." -ForegroundColor Yellow
-    exit 0
-}
 
 try {
     # Run the initialization, which will setup cache field metadata

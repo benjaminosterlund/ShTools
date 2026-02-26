@@ -30,7 +30,7 @@ function Get-ShToolsConfig {
         Get-ShToolsConfig -ConfigPath "C:\MyProject\shtools.config.json"
         Returns config from specific file
     #>
-    [CmdletBinding()]
+    [CmdletBinding(DefaultParameterSetName = 'SectionValues')]
     param(
         [Parameter()]
         [string]$ConfigPath,
@@ -102,6 +102,10 @@ function Set-ShToolsConfig {
 
     .EXAMPLE
         Set-ShToolsConfig -Section dotnet -Values @{ projectPath = "C:\MyProject\MyProject.csproj" }
+
+    .EXAMPLE
+        Set-ShToolsConfig -Section github -Key owner -Value "myorg"
+        Updates a single property in the github section
     #>
     [CmdletBinding()]
     param(
@@ -112,8 +116,15 @@ function Set-ShToolsConfig {
         [ValidateSet('core', 'github', 'localdb', 'dotnet')]
         [string]$Section,
 
-        [Parameter(Mandatory)]
-        [hashtable]$Values
+        [Parameter(Mandatory, ParameterSetName = 'SectionValues')]
+        [hashtable]$Values,
+
+        [Parameter(Mandatory, ParameterSetName = 'SingleValue')]
+        [string]$Key,
+
+        [Parameter(Mandatory, ParameterSetName = 'SingleValue')]
+        [AllowNull()]
+        [object]$Value
     )
 
     # Find or create config file
@@ -168,6 +179,10 @@ function Set-ShToolsConfig {
     if ($null -eq $config.$Section -or -not $config.PSObject.Properties.Name -contains $Section) {
         # Section doesn't exist or is null, create it
         $config | Add-Member -MemberType NoteProperty -Name $Section -Value ([PSCustomObject]@{}) -Force
+    }
+
+    if ($PSCmdlet.ParameterSetName -eq 'SingleValue') {
+        $Values = @{ $Key = $Value }
     }
 
     # Update/add values in section
@@ -427,4 +442,88 @@ if ($githubConfig) {
 } else {
     # Config will be checked by Test-GhProjectConfig when scripts call it
     $Script:Config = $null
+}
+
+
+
+function Get-GitHubOwnerFromUser {
+    [CmdletBinding()]
+    param(
+        [string]$Owner,
+        [switch]$NonInteractive
+    )
+
+    if (-not $Owner) {
+        if ($NonInteractive) {
+            throw "Owner is required in non-interactive mode."
+        }
+
+        $Owner = Read-Host "Enter GitHub Project Owner"
+    }
+
+    return $Owner
+}
+
+function Get-GitHubRepositoryFromUser {
+    [CmdletBinding()]
+    param(
+        [string]$Repo,
+        [switch]$NonInteractive
+    )
+
+    if (-not $Repo) {
+        if ($NonInteractive) {
+            throw "Repository is required in non-interactive mode."
+        }
+
+        $Repo = Read-Host "Enter GitHub Project Repository"
+    }
+
+    return $Repo
+}
+
+function Get-GitHubProjectTitleFromUser {
+    [CmdletBinding()]
+    param(
+        [string]$Title,
+        [switch]$NonInteractive
+    )
+
+    if (-not $Title) {
+        if ($NonInteractive) {
+            throw "Project title is required in non-interactive mode."
+        }
+
+        $Title = Read-Host "Enter GitHub Project Title"
+    }
+
+    return $Title
+}
+
+function Get-GitHubProjectNumberFromUser {
+    [CmdletBinding()]
+    param(
+        [int]$ProjectNumber,
+        [switch]$NonInteractive
+    )
+
+    if (-not $ProjectNumber) {
+        if ($NonInteractive) {
+            throw "Project number is required in non-interactive mode."
+        }
+        
+        Write-Host "`nYou can find the project number in the project URL:" -ForegroundColor Gray
+        Write-Host "https://github.com/users/$Owner/projects/[PROJECT_NUMBER]" -ForegroundColor Gray
+        do {
+            $projectInput = Read-Host "Enter GitHub Project number"
+            if ($projectInput -and $projectInput -match '^\d+$') {
+                $ProjectNumber = [int]$projectInput
+            }
+            else {
+                Write-Host "Please enter a valid project number." -ForegroundColor Red
+            }
+        } while (-not $ProjectNumber)
+    }
+
+    return $ProjectNumber
 }
