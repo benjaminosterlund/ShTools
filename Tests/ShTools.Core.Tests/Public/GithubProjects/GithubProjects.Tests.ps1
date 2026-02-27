@@ -12,6 +12,9 @@ BeforeAll {
     
     # Create test configuration
     $Script:TestConfig = @{
+        owner = "testowner"
+        repo = "testrepo"
+        projectNumber = 6
         GhProjectNumber = 6
         GhOwner = "testowner"
         GhRepo = "testowner/testrepo"
@@ -57,6 +60,13 @@ BeforeAll {
             }
             LastUpdated = "2025-10-28 14:06:30"
         }
+    }
+
+    $Script:TestConfig.github = @{
+        owner = $Script:TestConfig.owner
+        repo = $Script:TestConfig.repo
+        projectNumber = $Script:TestConfig.projectNumber
+        _cache = $Script:TestConfig._Cache
     }
     
     # Mock GitHub API responses
@@ -206,7 +216,7 @@ Describe 'Configuration Tests' {
 Describe 'Business Logic Functions with Mocked Data' {
     BeforeEach {
         # Set module configuration
-        & (Get-Module ghproject) { 
+        & $script:mod {
             $Script:Config = $args[0]
             $Script:GhOwner = $args[0].GhOwner
             $Script:GhRepo = $args[0].GhRepo  
@@ -214,20 +224,20 @@ Describe 'Business Logic Functions with Mocked Data' {
         } $Script:TestConfig
         
         # Mock all GitHub CLI wrapper functions
-        Mock -ModuleName ghproject Invoke-GhProjectView { return $Script:MockProjectInfo }
-        Mock -ModuleName ghproject Invoke-GhProjectFieldList { return $Script:MockFieldList }
-        Mock -ModuleName ghproject Invoke-GhProjectItemList { return $Script:MockItemList }
-        Mock -ModuleName ghproject Invoke-GhIssueCreate { return $Script:MockIssue }
-        Mock -ModuleName ghproject Invoke-GhProjectItemCreate { return $Script:MockDraftItem }
-        Mock -ModuleName ghproject Invoke-GhProjectItemAdd { return $Script:MockProjectItem }
-        Mock -ModuleName ghproject Invoke-GhProjectItemEdit { 
+        Mock -ModuleName ShTools.Core Invoke-GhProjectView { return $Script:MockProjectInfo }
+        Mock -ModuleName ShTools.Core Invoke-GhProjectFieldList { return $Script:MockFieldList }
+        Mock -ModuleName ShTools.Core Invoke-GhProjectItemList { return $Script:MockItemList }
+        Mock -ModuleName ShTools.Core Invoke-GhIssueCreate { return $Script:MockIssue }
+        Mock -ModuleName ShTools.Core Invoke-GhProjectItemCreate { return $Script:MockDraftItem }
+        Mock -ModuleName ShTools.Core Invoke-GhProjectItemAdd { return $Script:MockProjectItem }
+        Mock -ModuleName ShTools.Core Invoke-GhProjectItemEdit {
             # Set successful exit code
-            & (Get-Module ghproject) { $global:LASTEXITCODE = 0 }
+            & $script:mod { $global:LASTEXITCODE = 0 }
             return "" 
         }
-        Mock -ModuleName ghproject Invoke-GhApiUser { return "testuser" }
-        Mock -ModuleName ghproject Invoke-GhIssueEdit { }
-        Mock -ModuleName ghproject Invoke-GhIssueView { return "testuser" }
+        Mock -ModuleName ShTools.Core Invoke-GhApiUser { return "testuser" }
+        Mock -ModuleName ShTools.Core Invoke-GhIssueEdit { }
+        Mock -ModuleName ShTools.Core Invoke-GhIssueView { return "testuser" }
     }
     
     Context 'Find-ProjectItems' {
@@ -265,7 +275,7 @@ Describe 'Business Logic Functions with Mocked Data' {
         
         It 'Should return empty result when no matches found' {
             # Mock empty response for this specific test
-            Mock -ModuleName ghproject Invoke-GhProjectItemList { return $Script:MockEmptyItemList }
+            Mock -ModuleName ShTools.Core Invoke-GhProjectItemList { return $Script:MockEmptyItemList }
             
             $result = Find-ProjectItems -Title "NonExistent"
             
@@ -297,14 +307,14 @@ Describe 'Business Logic Functions with Mocked Data' {
             $result.Title | Should -Be "New test issue"
             $result.Url | Should -Be "https://github.com/testowner/testrepo/issues/3"
             
-            Should -Invoke -ModuleName ghproject Invoke-GhIssueCreate -Times 1 -Exactly
+            Should -Invoke -ModuleName ShTools.Core Invoke-GhIssueCreate -Times 1 -Exactly
         }
         
         It 'Should create issue with title only (auto-generated body)' {
             $result = New-RepoIssue -Title "Test Issue"
             
             $result | Should -Not -BeNullOrEmpty
-            Should -Invoke -ModuleName ghproject Invoke-GhIssueCreate -Times 1 -Exactly -ParameterFilter {
+            Should -Invoke -ModuleName ShTools.Core Invoke-GhIssueCreate -Times 1 -Exactly -ParameterFilter {
                 $Body -eq "Issue created via automation script."
             }
         }
@@ -313,7 +323,7 @@ Describe 'Business Logic Functions with Mocked Data' {
             $result = New-RepoIssue -Title "Test Issue" -Body "Test body" -Labels @("bug", "enhancement")
             
             $result | Should -Not -BeNullOrEmpty
-            Should -Invoke -ModuleName ghproject Invoke-GhIssueCreate -Times 1 -Exactly -ParameterFilter {
+            Should -Invoke -ModuleName ShTools.Core Invoke-GhIssueCreate -Times 1 -Exactly -ParameterFilter {
                 $Labels -contains "bug" -and $Labels -contains "enhancement"
             }
         }
@@ -324,14 +334,14 @@ Describe 'Business Logic Functions with Mocked Data' {
             $result = New-ProjectDraftItem -Title "Test Draft"
             
             $result | Should -Be "PVTI_lAHOAx1E6c4BGQlEzggbNew"
-            Should -Invoke -ModuleName ghproject Invoke-GhProjectItemCreate -Times 1 -Exactly
+            Should -Invoke -ModuleName ShTools.Core Invoke-GhProjectItemCreate -Times 1 -Exactly
         }
         
         It 'Should create draft item with title and body' {
             $result = New-ProjectDraftItem -Title "Test Draft" -Body "Draft description"
             
             $result | Should -Be "PVTI_lAHOAx1E6c4BGQlEzggbNew"
-            Should -Invoke -ModuleName ghproject Invoke-GhProjectItemCreate -Times 1 -Exactly -ParameterFilter {
+            Should -Invoke -ModuleName ShTools.Core Invoke-GhProjectItemCreate -Times 1 -Exactly -ParameterFilter {
                 $Body -eq "Draft description"
             }
         }
@@ -342,7 +352,7 @@ Describe 'Business Logic Functions with Mocked Data' {
             $result = Add-ProjectItemForIssue -IssueNumber 3
             
             $result | Should -Be "PVTI_lAHOAx1E6c4BGQlEzggbAdd"
-            Should -Invoke -ModuleName ghproject Invoke-GhProjectItemAdd -Times 1 -Exactly -ParameterFilter {
+            Should -Invoke -ModuleName ShTools.Core Invoke-GhProjectItemAdd -Times 1 -Exactly -ParameterFilter {
                 $IssueUrl -eq "https://github.com/testowner/testrepo/issues/3"
             }
         }
@@ -357,7 +367,7 @@ Describe 'Business Logic Functions with Mocked Data' {
             $result.StatusKey | Should -Be "InProgress"
             $result.Success | Should -Be $true
             
-            Should -Invoke -ModuleName ghproject Invoke-GhProjectItemEdit -Times 1 -Exactly -ParameterFilter {
+            Should -Invoke -ModuleName ShTools.Core Invoke-GhProjectItemEdit -Times 1 -Exactly -ParameterFilter {
                 $ItemId -eq "PVTI_test123" -and $OptionId -eq "47fc9ee4"
             }
         }
@@ -365,7 +375,7 @@ Describe 'Business Logic Functions with Mocked Data' {
         It 'Should throw error for invalid status' {
             { Set-ProjectItemStatus -ItemId "PVTI_test123" -StatusKey "InvalidStatus" } | Should -Throw "*Invalid status*"
             
-            Should -Invoke -ModuleName ghproject Invoke-GhProjectItemEdit -Times 0
+            Should -Invoke -ModuleName ShTools.Core Invoke-GhProjectItemEdit -Times 0
         }
         
         It 'Should use correct project and field IDs' {
@@ -374,7 +384,7 @@ Describe 'Business Logic Functions with Mocked Data' {
             $result | Should -Not -BeNullOrEmpty
             $result.StatusKey | Should -Be "Done"
             
-            Should -Invoke -ModuleName ghproject Invoke-GhProjectItemEdit -Times 1 -Exactly -ParameterFilter {
+            Should -Invoke -ModuleName ShTools.Core Invoke-GhProjectItemEdit -Times 1 -Exactly -ParameterFilter {
                 $ProjectId -eq "PVT_kwHOAx1E6c4BGQlE" -and $FieldId -eq "PVTSSF_lAHOAx1E6c4BGQlEzg3W5Uw" -and $OptionId -eq "98236657"
             }
         }
@@ -384,19 +394,19 @@ Describe 'Business Logic Functions with Mocked Data' {
         It 'Should assign current user to issue' {
             { Set-IssueAssignment -IssueNumber 1 } | Should -Not -Throw
             
-            Should -Invoke -ModuleName ghproject Invoke-GhApiUser -Times 1 -Exactly
-            Should -Invoke -ModuleName ghproject Invoke-GhIssueEdit -Times 1 -Exactly -ParameterFilter {
+            Should -Invoke -ModuleName ShTools.Core Invoke-GhApiUser -Times 1 -Exactly
+            Should -Invoke -ModuleName ShTools.Core Invoke-GhIssueEdit -Times 1 -Exactly -ParameterFilter {
                 $IssueNumber -eq 1 -and $AddAssignee -eq "testuser"
             }
         }
         
         It 'Should handle API user failure gracefully' {
-            Mock -ModuleName ghproject Invoke-GhApiUser { return $null }
+            Mock -ModuleName ShTools.Core Invoke-GhApiUser { return $null }
             
             $result = Set-IssueAssignment -IssueNumber 1
             
             $result | Should -Be $false
-            Should -Invoke -ModuleName ghproject Invoke-GhIssueEdit -Times 0
+            Should -Invoke -ModuleName ShTools.Core Invoke-GhIssueEdit -Times 0
         }
     }
     
@@ -409,9 +419,9 @@ Describe 'Business Logic Functions with Mocked Data' {
             $result.issue.Number | Should -Be 3
             $result.projectItemId | Should -Be "PVTI_lAHOAx1E6c4BGQlEzggbAdd"
             
-            Should -Invoke -ModuleName ghproject Invoke-GhIssueCreate -Times 1 -Exactly
-            Should -Invoke -ModuleName ghproject Invoke-GhProjectItemAdd -Times 1 -Exactly
-            Should -Invoke -ModuleName ghproject Invoke-GhProjectItemEdit -Times 1 -Exactly
+            Should -Invoke -ModuleName ShTools.Core Invoke-GhIssueCreate -Times 1 -Exactly
+            Should -Invoke -ModuleName ShTools.Core Invoke-GhProjectItemAdd -Times 1 -Exactly
+            Should -Invoke -ModuleName ShTools.Core Invoke-GhProjectItemEdit -Times 1 -Exactly
         }
         
         It 'Should create draft item for Draft type' {
@@ -420,22 +430,22 @@ Describe 'Business Logic Functions with Mocked Data' {
             $result | Should -Not -BeNullOrEmpty
             $result.ProjectItemId | Should -Be "PVTI_lAHOAx1E6c4BGQlEzggbNew"
             
-            Should -Invoke -ModuleName ghproject Invoke-GhProjectItemCreate -Times 1 -Exactly
-            Should -Invoke -ModuleName ghproject Invoke-GhProjectItemEdit -Times 1 -Exactly
+            Should -Invoke -ModuleName ShTools.Core Invoke-GhProjectItemCreate -Times 1 -Exactly
+            Should -Invoke -ModuleName ShTools.Core Invoke-GhProjectItemEdit -Times 1 -Exactly
         }
     }
 }
 
 Describe 'Error Handling and Edge Cases' {
     BeforeEach {
-        & (Get-Module ghproject) { 
+        & $script:mod {
             $Script:Config = $args[0]
         } $Script:TestConfig
     }
     
     Context 'GitHub API Failures' {
         It 'Should handle Invoke-GhProjectItemList failure gracefully' {
-            Mock -ModuleName ghproject Invoke-GhProjectItemList { throw "GitHub API Error" }
+            Mock -ModuleName ShTools.Core Invoke-GhProjectItemList { throw "GitHub API Error" }
             
             # This should not throw, but should handle the error gracefully
             { Find-ProjectItems -Title "test" } | Should -Not -Throw
@@ -452,7 +462,7 @@ Describe 'Error Handling and Edge Cases' {
         }
         
         It 'Should handle invalid configuration gracefully' {
-            & (Get-Module ghproject) { $Script:Config = $null }
+            & $script:mod { $Script:Config = $null }
             
             # With our improved error handling, this should not throw but return empty
             $result = Find-ProjectItems -Title "test"
@@ -490,7 +500,7 @@ Describe 'Configuration Validation' {
         $config._Cache.StatusField.Id | Should -Be "PVTSSF_lAHOAx1E6c4BGQlEzg3W5Uw"
         $config._Cache.StatusField.Name | Should -Be "Status"
         $config._Cache.ProjectId | Should -Be "PVT_kwHOAx1E6c4BGQlE"
-        $config.GhProjectNumber | Should -Be 6
-        $config.GhOwner | Should -Be "testowner"
+        $config.projectNumber | Should -Be 6
+        $config.owner | Should -Be "testowner"
     }
 }
