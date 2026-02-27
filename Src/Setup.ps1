@@ -21,7 +21,7 @@
 
 [CmdletBinding()]
 param(
-    [string]$RootDirectory = $PWD
+    [string]$RootDirectory = "..\"
 )
 
 $ErrorActionPreference = 'Stop'
@@ -35,163 +35,52 @@ if (-not (Get-Module ShTools.Core)) {
 }
 Import-PSMenuIfAvailable -ErrorAction SilentlyContinue | Out-Null
 
-# ===== SETUP OPTIONS =====
-# Single source of truth for all setup components
-$script:SetupOptions = [ordered]@{
-    "Git Repository Setup" = @{
-        Description = "Initialize or configure Git repository and user credentials"
-        Script = "Git\InitGit.ps1"
-    }
-    "GitHub Project Setup" = @{
-        Description = "Initialize GitHub Project configuration and kanban board"
-        Script = "GithubProject\InitGithubProject.ps1"
-    }
-    ".NET Project Settings" = @{
-        Description = "Configure .NET project paths and settings"
-        Script = "Dotnet\InitDotnet.ps1"
-    }
-    ".NET User Secrets" = @{
-        Description = "Setup user secrets for .NET projects"
-        Script = "Dotnet\UserSecrets\InitUserSecrets.ps1"
-    }
-    "Database Connection Strings" = @{
-        Description = "Setup user secrets and database connection strings"
-        Script = "Dotnet\UserSecrets\SetupUserSecretsAndDatabaseConnectionString.ps1"
-    }
-    "LocalDb Settings" = @{
-        Description = "Configure LocalDb project settings"
-        Script = "LocalDb\InitLocalDb.ps1"
-    }
+
+Show-SetupWizardHeader
+
+
+$setupOptions = Get-SetupOptions
+
+Show-SetupConfigurationStatus -RootDirectory $RootDirectory
+
+if (-not (Confirm-ContinueSetup)) {
+    return
 }
 
-# ===== MENU DISPLAY =====
+$selectedComponents = Show-SetupMenu -SetupOptions $setupOptions
 
-
-function Show-SetupMenu {
-    <#
-    .SYNOPSIS
-        Display multi-select menu for choosing setup components.
-    #>
-    [CmdletBinding()]
-    param()
-    
-    Write-Host ""
-    Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "║          ShTools Interactive Setup Wizard                    ║" -ForegroundColor Cyan
-    Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
-    Write-Host ""
-    
-    Write-Host "📋 Select components to initialize (use Space to select, Enter to confirm):" -ForegroundColor Yellow
-    Write-Host ""
-    
-    $menuItems = $script:SetupOptions.Keys | ForEach-Object {
-        "$_ - $($script:SetupOptions[$_].Description)"
-    }
-    
-    $selections = Show-Menu -MenuItems $menuItems -MultiSelect
-    
-    if (-not $selections -or $selections.Count -eq 0) {
-        Write-Host "No components selected. Exiting." -ForegroundColor Yellow
-        return @()
-    }
-    
-    return $selections | ForEach-Object { $_ -replace ' - .*$', '' }
+if (-not $selectedComponents -or $selectedComponents.Count -eq 0) {
+    Write-Host "Setup cancelled. No components selected." -ForegroundColor Yellow
+    return
 }
 
-# ===== COMPONENT EXECUTION =====
-function Invoke-SetupComponent {
-    <#
-    .SYNOPSIS
-        Execute setup for a specific component by calling its Init script.
-    #>
-    [CmdletBinding()]
-    param(
-        [string]$ComponentName,
-        [hashtable]$ComponentInfo,
-        [string]$RootDirectory
-    )
-    
-    Write-Host ""
-    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
-    Write-Host "  Setting up: $ComponentName" -ForegroundColor Yellow
-    Write-Host "═══════════════════════════════════════════════════════════" -ForegroundColor Cyan
-    Write-Host ""
-    
-    # All components now have scripts - just call them
-    $scriptPath = Join-Path $PSScriptRoot $ComponentInfo.Script
-    
-    if (Test-Path $scriptPath) {
+Write-Host ""
+Write-Host "You selected the following components:" -ForegroundColor Cyan
+foreach ($component in $selectedComponents) {
+    Write-Host "  • $component" -ForegroundColor White
+}
+Write-Host ""
+
+if (-not (Confirm-ProceedWithSetup)) {
+    return
+}
+
+foreach ($component in $selectedComponents) {
+    if ($setupOptions.Contains($component)) {
         try {
-            & $scriptPath -RootDirectory $RootDirectory
+            Invoke-SetupComponent -ComponentName $component `
+                -ComponentInfo $setupOptions[$component] `
+                -RootDirectory $RootDirectory `
+                -ScriptsRoot $PSScriptRoot
         }
         catch {
-            throw "Failed to execute $scriptPath : $_"
-        }
-    } else {
-        Write-Warning "Init script not found: $scriptPath"
-        Write-Host "Expected: $scriptPath" -ForegroundColor Gray
-    }
-    
-    Write-Host ""
-    Write-Host "✅ Completed: $ComponentName" -ForegroundColor Green
-}
+            Write-Host "❌ Error setting up ${component}: $_" -ForegroundColor Red
 
-# ===== MAIN ORCHESTRATION =====
-function Start-InteractiveSetup {
-    [CmdletBinding()]
-    param([string]$RootDirectory)
-    
-    Write-Host ""
-    Write-Host "Analyzing current setup..." -ForegroundColor Cyan
-    $configStatus = Get-ConfigurationStatus -RootDirectory $RootDirectory
-    Show-ConfigurationStatus -Status $configStatus
-    
-
-    if(-not (Confirm-ContinueSetup)) {
-        return
-    }
-
-    $selectedComponents = Show-SetupMenu
-    
-    if (-not $selectedComponents -or $selectedComponents.Count -eq 0) {
-        Write-Host "Setup cancelled. No components selected." -ForegroundColor Yellow
-        return
-    }
-    
-    Write-Host ""
-    Write-Host "You selected the following components:" -ForegroundColor Cyan
-    foreach ($component in $selectedComponents) {
-        Write-Host "  • $component" -ForegroundColor White
-    }
-    Write-Host ""
-    
-    if (-not (Confirm-ProceedWithSetup)) {
-        return
-    }
-    
-    foreach ($component in $selectedComponents) {
-        if ($script:SetupOptions.Contains($component)) {
-            try {
-                Invoke-SetupComponent -ComponentName $component `
-                                     -ComponentInfo $script:SetupOptions[$component] `
-                                     -RootDirectory $RootDirectory
-            }
-            catch {
-                Write-Host "❌ Error setting up ${component}: $_" -ForegroundColor Red
-                
-                if (-not (Read-YesNo -Title "Continue with remaining components?" -DefaultYes $false)) {
-                    break
-                }
+            if (-not (Read-YesNo -Title "Continue with remaining components?" -DefaultYes $false)) {
+                break
             }
         }
     }
-    
-    Write-Host ""
-    Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Green
-    Write-Host "║            Setup Wizard Complete!                            ║" -ForegroundColor Green
-    Write-Host "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Green
-    Write-Host ""
 }
 
-# Execute main function
-Start-InteractiveSetup -RootDirectory $RootDirectory
+Show-SetupCompleteBanner
