@@ -5,7 +5,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-Import-Module (Join-Path $PSScriptRoot '..\ShTools.Core\ShTools.Core.psd1') -Force
+& (Join-Path $PSScriptRoot '..\..\Ensure-ShToolsCore.ps1') -ScriptRoot $PSScriptRoot
 
 
 $projectPath = $ProjectPath

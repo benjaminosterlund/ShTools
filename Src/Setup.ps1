@@ -27,12 +27,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # ===== MODULE INITIALIZATION =====
-if (-not (Get-Module ShTools.Core)) {
-    $modulePath = Join-Path $PSScriptRoot "ShTools.Core\ShTools.Core.psd1"
-    if (Test-Path $modulePath) {
-        Import-Module $modulePath -Force
-    }
-}
+& (Join-Path $PSScriptRoot 'Ensure-ShToolsCore.ps1') -ScriptRoot $PSScriptRoot
 Import-PSMenuIfAvailable -ErrorAction SilentlyContinue | Out-Null
 
 

@@ -40,7 +40,7 @@ $ErrorActionPreference = 'Stop'
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
 # Import module and check configuration
-Import-Module (Join-Path $PSScriptRoot '..\ShTools.Core\ShTools.Core.psd1') -Force
+& (Join-Path $PSScriptRoot '..\Ensure-ShToolsCore.ps1') -ScriptRoot $PSScriptRoot
 
 if (-not (Test-GhProjectConfig)) { exit 1 }
 

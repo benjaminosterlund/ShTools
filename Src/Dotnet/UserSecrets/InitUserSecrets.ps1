@@ -9,7 +9,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-Import-Module (Join-Path $PSScriptRoot '..\ShTools.Core\ShTools.Core.psd1') -Force
+& (Join-Path $PSScriptRoot '..\..\Ensure-ShToolsCore.ps1') -ScriptRoot $PSScriptRoot
 
 # Select project paths
 $ProjectPath = Select-DotnetProject -ProjectPath:$ProjectPath

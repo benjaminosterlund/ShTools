@@ -40,13 +40,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # Import ShTools module
-$modulePath = Join-Path $PSScriptRoot "..\ShTools.Core\ShTools.Core.psd1"
-if (Test-Path $modulePath) {
-    Import-Module $modulePath -Force
-} else {
-    Write-Error "ShTools.Core module not found at: $modulePath"
-    exit 1
-}
+& (Join-Path $PSScriptRoot '..\Ensure-ShToolsCore.ps1') -ScriptRoot $PSScriptRoot
 
 Write-Host ""
 Write-Host "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan

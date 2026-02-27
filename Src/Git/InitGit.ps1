@@ -36,15 +36,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # Import ShTools module if not already loaded
-if (-not (Get-Module ShTools.Core)) {
-    $modulePath = Join-Path $PSScriptRoot "..\..\ShTools.Core\ShTools.Core.psd1"
-    if (Test-Path $modulePath) {
-        Import-Module $modulePath -Force
-    }
-    else {
-        Write-Warning "ShTools.Core module not found. Some functions may not be available."
-    }
-}
+& (Join-Path $PSScriptRoot '..\Ensure-ShToolsCore.ps1') -ScriptRoot $PSScriptRoot
 
 
 # Main execution

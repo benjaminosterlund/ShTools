@@ -1,3 +1,24 @@
+function Invoke-DotnetUserSecrets {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateSet('init', 'clear')]
+        [string]$Action,
+
+        [Parameter(Mandatory)]
+        [string]$ProjectFile
+    )
+
+    $output = & dotnet user-secrets $Action --project $ProjectFile
+
+    return [PSCustomObject]@{
+        Success = ($LASTEXITCODE -eq 0)
+        ExitCode = $LASTEXITCODE
+        Output = $output
+    }
+}
+
+
 function Initialize-ProjectUserSecrets {
     param(
         [string]$ProjectFile,
@@ -23,8 +44,8 @@ function Initialize-ProjectUserSecrets {
         
         # Clear all existing secrets
         Write-Host "Clearing existing secrets for $ProjectName..." -ForegroundColor Yellow
-        & dotnet user-secrets clear --project $ProjectFile
-        if ($LASTEXITCODE -eq 0) {
+        $clearResult = Invoke-DotnetUserSecrets -Action clear -ProjectFile $ProjectFile
+        if ($clearResult.Success) {
             Write-Host "Existing secrets cleared for $ProjectName." -ForegroundColor Green
         } else {
             Write-Host "Failed to clear existing secrets for $ProjectName." -ForegroundColor Red
@@ -33,8 +54,8 @@ function Initialize-ProjectUserSecrets {
     }
     
     Write-Host "Initializing dotnet user-secrets for $ProjectName..." -ForegroundColor Yellow
-    & dotnet user-secrets init --project $ProjectFile
-    if ($LASTEXITCODE -eq 0) {
+    $initResult = Invoke-DotnetUserSecrets -Action init -ProjectFile $ProjectFile
+    if ($initResult.Success) {
         if ($Reset) {
             Write-Host "✓ dotnet user-secrets reset and reinitialized successfully for $ProjectName." -ForegroundColor Green
         } else {
