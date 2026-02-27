@@ -32,6 +32,23 @@ function Confirm-ProceedWithSetup {
 }
 
 
+function Confirm-ProceedWithSettingUpComponentsDespiteError {
+    <#
+    .SYNOPSIS
+        Confirm user wants to proceed with the selected setup components despite errors.
+    #>
+    [CmdletBinding()]
+    param()
+    
+    if (-not (Select-YesNo -Title "Continue with remaining components?" -DefaultYes $true)) {
+        Write-Host "Setup cancelled." -ForegroundColor Yellow
+        return $false
+    }
+    
+    return $true
+}
+
+
 function Show-SetupCompleteBanner {
     <#
     .SYNOPSIS

@@ -71,7 +71,7 @@ foreach ($component in $selectedComponents) {
         catch {
             Write-Host "❌ Error setting up ${component}: $_" -ForegroundColor Red
 
-            if (-not (Read-YesNo -Title "Continue with remaining components?" -DefaultYes $false)) {
+            if (-not (Confirm-ProceedWithSettingUpComponentsDespiteError)) {
                 break
             }
         }
